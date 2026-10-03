@@ -16,13 +16,12 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include "telnetd.hpp"
+
 #include <stdarg.h>
-#include <windef.h>
 #include <winbase.h>
 #include <winsvc.h>
 #include <wine/debug.h>
-
-int kickoff_telnetd(void);
 
 WINE_DEFAULT_DEBUG_CHANNEL(telnetd);
 
@@ -35,7 +34,7 @@ static DWORD WINAPI service_handler( DWORD ctrl, DWORD event_type, LPVOID event_
 {
     SERVICE_STATUS status;
 
-    status.dwServiceType             = SERVICE_WIN32;
+    status.dwServiceType             = SERVICE_WIN32_OWN_PROCESS;
     status.dwControlsAccepted        = SERVICE_ACCEPT_STOP;
     status.dwWin32ExitCode           = 0;
     status.dwServiceSpecificExitCode = 0;
@@ -52,44 +51,76 @@ static DWORD WINAPI service_handler( DWORD ctrl, DWORD event_type, LPVOID event_
         SetServiceStatus( service_handle, &status );
         SetEvent( stop_event );
         return NO_ERROR;
+    
+    case SERVICE_CONTROL_INTERROGATE:
+        return NO_ERROR;
+
     default:
         WINE_FIXME( "got service ctrl %x\n", ctrl );
-        status.dwCurrentState = SERVICE_RUNNING;
-        SetServiceStatus( service_handle, &status );
         return NO_ERROR;
     }
 }
 
 static void WINAPI serv_main(DWORD argc, LPWSTR *argv)
 {
+    int telnetd_status;
     SERVICE_STATUS status;
 
     WINE_TRACE( "starting service\n" );
 
     stop_event = CreateEventW( NULL, TRUE, FALSE, NULL );
+    if (!stop_event) {
+
+        WINE_TRACE( "failed to create stop event\n" );
+        return;
+    }
 
     service_handle = RegisterServiceCtrlHandlerExW( telnetdW, service_handler, NULL );
-    if (!service_handle)
+    if (!service_handle) {
+        
+        CloseHandle(stop_event);
         return;
+    }
 
-    status.dwServiceType             = SERVICE_WIN32;
-    status.dwCurrentState            = SERVICE_RUNNING;
-    status.dwControlsAccepted        = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
+    status.dwServiceType             = SERVICE_WIN32_OWN_PROCESS;
+    status.dwCurrentState            = SERVICE_START_PENDING;
+    status.dwControlsAccepted        = 0;
     status.dwWin32ExitCode           = 0;
     status.dwServiceSpecificExitCode = 0;
     status.dwCheckPoint              = 0;
     status.dwWaitHint                = 10000;
     SetServiceStatus( service_handle, &status );
 
-    /* Argument Ignored for now */
-    kickoff_telnetd();
+    telnetd_status = kickoff_telnetd(argc, argv);
+
+    if(telnetd_status != TELNETD_STATUS_OK)
+    {
+        status.dwCurrentState     = SERVICE_STOPPED;
+        status.dwControlsAccepted = 0;
+        status.dwWin32ExitCode           = ERROR_SERVICE_SPECIFIC_ERROR;
+        status.dwServiceSpecificExitCode = telnetd_status;
+        SetServiceStatus( service_handle, &status );
+        WINE_TRACE( "service failed to start: %d\n", telnetd_status );
+
+        CloseHandle(stop_event);
+
+        return;
+    }
+
+    status.dwCurrentState            = SERVICE_RUNNING;
+    status.dwControlsAccepted        = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
+    SetServiceStatus( service_handle, &status );
 
     WaitForSingleObject( stop_event, INFINITE );
+
+    shutdown_telnetd();
 
     status.dwCurrentState     = SERVICE_STOPPED;
     status.dwControlsAccepted = 0;
     SetServiceStatus( service_handle, &status );
     WINE_TRACE( "service stopped\n" );
+
+    CloseHandle(stop_event);
 }
 
 int main(int argc, char **argv)
