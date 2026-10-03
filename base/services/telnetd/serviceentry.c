@@ -1,5 +1,6 @@
 /*
  * Copyright 2007 Jacek Caban for CodeWeavers
+ * Copyright 2026 Aravinda Samarathunga (I-A-S)
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -63,6 +64,9 @@ static DWORD WINAPI service_handler( DWORD ctrl, DWORD event_type, LPVOID event_
 
 static void WINAPI serv_main(DWORD argc, LPWSTR *argv)
 {
+    (void)argc;
+    (void)argv;
+
     int telnetd_status;
     SERVICE_STATUS status;
 
@@ -91,7 +95,7 @@ static void WINAPI serv_main(DWORD argc, LPWSTR *argv)
     status.dwWaitHint                = 10000;
     SetServiceStatus( service_handle, &status );
 
-    telnetd_status = kickoff_telnetd(argc, argv);
+    telnetd_status = kickoff_telnetd(stop_event);
 
     if(telnetd_status != TELNETD_STATUS_OK)
     {
