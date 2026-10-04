@@ -9,19 +9,20 @@
 
 #include <windef.h>
 
-typedef int TELENTD_STATUS;
+typedef int TELNETD_STATUS;
 
 #define TELNETD_STATUS_OK 0
 #define TELNETD_STATUS_ERR_SOCK_CREATE 1
 #define TELNETD_STATUS_ERR_SOCK_BIND 2
 #define TELNETD_STATUS_ERR_SOCK_LISTEN 3
 #define TELNETD_STATUS_ERR_THRD_CREATE 4
-#define TELNETD_STATUS_ERR_UNKNOWN 5
+#define TELNETD_STATUS_ERR_EVNT_CREATE 5
+#define TELNETD_STATUS_ERR_UNKNOWN 6
 
 #ifdef __cplusplus
 extern "C"
 #endif
-TELENTD_STATUS kickoff_telnetd(HANDLE* out_worker_thread);
+TELNETD_STATUS kickoff_telnetd(HANDLE* out_worker_thread);
 
 #ifdef __cplusplus
 extern "C"
@@ -35,14 +36,21 @@ void shutdown_telnetd(void);
 
 class Telnetd
 {
+    static DWORD WINAPI worker_thread_func(LPVOID self);
+
 public:
-    TELENTD_STATUS initialize();
+    TELNETD_STATUS initialize();
     void terminate();
 
-    TELENTD_STATUS serve();
+    HANDLE get_worker_thread() const { return m_worker_thread; } 
+
+private:
+    TELNETD_STATUS serve();
 
 private:
     SOCKET m_socket {INVALID_SOCKET};
+    HANDLE m_worker_thread {NULL};
+    HANDLE m_stop_event {NULL};
 };
 
 #endif

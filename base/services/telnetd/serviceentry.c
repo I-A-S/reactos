@@ -65,7 +65,10 @@ static DWORD WINAPI service_handler( DWORD ctrl, DWORD event_type, LPVOID event_
 static void WINAPI serv_main(DWORD argc, LPWSTR *argv)
 {
     SERVICE_STATUS status;
-    TELENTD_STATUS telnetd_status;
+    TELNETD_STATUS telnetd_status;
+    DWORD wait_result;
+    DWORD worker_thread_ec;
+    HANDLE handles[2];
 
     (void)argc;
     (void)argv;
@@ -115,16 +118,53 @@ static void WINAPI serv_main(DWORD argc, LPWSTR *argv)
     status.dwControlsAccepted        = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
     SetServiceStatus( service_handle, &status );
 
-    WaitForMultipleObjects( 2, &stop_event, FALSE, INFINITE );
+    handles[0] = worker_thread_handle;
+    handles[1] = stop_event;
+    wait_result = WaitForMultipleObjects( 2, handles, FALSE, INFINITE );
+    if (wait_result == WAIT_OBJECT_0) {
+        if (!GetExitCodeThread(worker_thread_handle, &worker_thread_ec)) {
+            worker_thread_ec = TELNETD_STATUS_ERR_UNKNOWN;
+        }
+
+        // In this case no one asked worker to stop
+        // and yet it stopped when it should be an
+        // infinite loop, so something went wrong and
+        // reporting TELNETD_STATUS_OK can be confusing.
+        if(worker_thread_ec == TELNETD_STATUS_OK)
+            worker_thread_ec = TELNETD_STATUS_ERR_UNKNOWN;
+
+        shutdown_telnetd();
+        CloseHandle(stop_event);
+
+        status.dwCurrentState     = SERVICE_STOPPED;
+        status.dwControlsAccepted = 0;
+        status.dwWin32ExitCode           = ERROR_SERVICE_SPECIFIC_ERROR;
+        status.dwServiceSpecificExitCode = worker_thread_ec;
+        SetServiceStatus( service_handle, &status );
+        WINE_TRACE( "telnetd exited unexpectedly: %d\n", worker_thread_ec );
+
+        return;
+    } else if(wait_result == WAIT_FAILED) {
+        status.dwWin32ExitCode = GetLastError();
+
+        shutdown_telnetd();
+        CloseHandle(stop_event);
+
+        status.dwCurrentState     = SERVICE_STOPPED;
+        status.dwControlsAccepted = 0;
+        SetServiceStatus( service_handle, &status );
+        WINE_TRACE( "wait failed: %lu\n",  status.dwWin32ExitCode);
+
+        return;
+    }
 
     shutdown_telnetd();
+    CloseHandle(stop_event);
 
     status.dwCurrentState     = SERVICE_STOPPED;
     status.dwControlsAccepted = 0;
     SetServiceStatus( service_handle, &status );
     WINE_TRACE( "service stopped\n" );
-
-    CloseHandle(stop_event);
 }
 
 int main(int argc, char **argv)
