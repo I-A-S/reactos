@@ -9,43 +9,70 @@
 
 #include <winbase.h>
 
-extern "C" int kickoff_telnetd(HANDLE stop_event)
+static Telnetd* g_telnetd{};
+
+static DWORD WINAPI worker_thread(LPVOID)
 {
-    OutputDebugStringA("telnetd: kickoff called\n");
+    g_telnetd->serve();
+
+    return 0;
+}
+
+extern "C" TELENTD_STATUS kickoff_telnetd(HANDLE* out_worker_thread)
+{
+    TELENTD_STATUS status {TELNETD_STATUS_OK};
+
+    g_telnetd = new Telnetd();
+
+    status = g_telnetd->initialize();
     
-    DWORD thread_id{};
-    HANDLE thread_handle =  CreateThread(NULL, 
+    if(status != TELNETD_STATUS_OK) {
+        delete g_telnetd;
+        return status;
+    }
+    
+    DWORD worker_thread_id{};
+    HANDLE worker_thread_handle =  CreateThread(NULL, 
         0, 
-        [](LPVOID arg)-> DWORD {
-            OutputDebugStringA("telnetd: inside thread\n");
-            return 0;
-        }, 
-        NULL, 
+        worker_thread, 
+        nullptr, 
         0, 
-        &thread_id
+        &worker_thread_id
     );
+    if(!worker_thread_handle) {
+        delete g_telnetd;
+        return TELNETD_STATUS_ERR_THRD_CREATE;
+    }
+    *out_worker_thread = worker_thread_handle;
 
-    WaitForSingleObject(thread_handle, INFINITE);
-
-    if(!SetEvent(stop_event))
-        return TELNETD_STATUS_ERR_UNKNOWN;
-
-    return TELNETD_STATUS_OK;
+    return status;
 }
 
 extern "C" void shutdown_telnetd(void)
 {
-    OutputDebugStringA("telnetd: terminate called\n");
+    if(g_telnetd)
+        g_telnetd->terminate();
 
+    delete g_telnetd;
 }
 
-int Telnetd::launch()
+TELENTD_STATUS Telnetd::initialize()
 {
+    OutputDebugStringA("telnetd: initialize called\n");
     
     return TELNETD_STATUS_OK;
 }
 
-void Telnetd::shutdown()
+void Telnetd::terminate()
 {
+    OutputDebugStringA("telnetd: terminate called\n");
+}
 
+TELENTD_STATUS Telnetd::serve()
+{
+    OutputDebugStringA("telnetd: serve called\n");
+
+    while(true) {}
+
+    return TELNETD_STATUS_OK;
 }

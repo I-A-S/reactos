@@ -29,7 +29,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(telnetd);
 static WCHAR telnetdW[] = {'t','e','l','n','e','t','d',0};
 
 static SERVICE_STATUS_HANDLE service_handle;
-static HANDLE stop_event;
+static HANDLE stop_event, worker_thread_handle;
 
 static DWORD WINAPI service_handler( DWORD ctrl, DWORD event_type, LPVOID event_data, LPVOID context )
 {
@@ -64,11 +64,11 @@ static DWORD WINAPI service_handler( DWORD ctrl, DWORD event_type, LPVOID event_
 
 static void WINAPI serv_main(DWORD argc, LPWSTR *argv)
 {
+    SERVICE_STATUS status;
+    TELENTD_STATUS telnetd_status;
+
     (void)argc;
     (void)argv;
-
-    int telnetd_status;
-    SERVICE_STATUS status;
 
     WINE_TRACE( "starting service\n" );
 
@@ -95,7 +95,7 @@ static void WINAPI serv_main(DWORD argc, LPWSTR *argv)
     status.dwWaitHint                = 10000;
     SetServiceStatus( service_handle, &status );
 
-    telnetd_status = kickoff_telnetd(stop_event);
+    telnetd_status = kickoff_telnetd(&worker_thread_handle);
 
     if(telnetd_status != TELNETD_STATUS_OK)
     {
@@ -115,7 +115,7 @@ static void WINAPI serv_main(DWORD argc, LPWSTR *argv)
     status.dwControlsAccepted        = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
     SetServiceStatus( service_handle, &status );
 
-    WaitForSingleObject( stop_event, INFINITE );
+    WaitForMultipleObjects( 2, &stop_event, FALSE, INFINITE );
 
     shutdown_telnetd();
 
