@@ -7,3 +7,17 @@
 
 #include "tcpserver.hpp"
 
+TCPServer::EStatus TCPServer::initialize()
+{
+
+}
+
+void TCPServer::terminate()
+{
+
+}
+
+void TCPServer::send_data_to_socket(SOCKET s, const uint8_t* data, size_t length)
+{
+
+}
