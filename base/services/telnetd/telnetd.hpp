@@ -17,7 +17,8 @@ typedef int TELNETD_STATUS;
 #define TELNETD_STATUS_ERR_SOCK_LISTEN 3
 #define TELNETD_STATUS_ERR_THRD_CREATE 4
 #define TELNETD_STATUS_ERR_EVNT_CREATE 5
-#define TELNETD_STATUS_ERR_UNKNOWN 6
+#define TELNETD_STATUS_ERR_WINSCK_INIT 6
+#define TELNETD_STATUS_ERR_UNKNOWN 7
 
 #ifdef __cplusplus
 extern "C"
@@ -48,6 +49,7 @@ private:
     TELNETD_STATUS serve();
 
 private:
+    WSADATA m_wsa_data{};
     SOCKET m_socket {INVALID_SOCKET};
     HANDLE m_worker_thread {NULL};
     HANDLE m_stop_event {NULL};

@@ -9,6 +9,9 @@
 
 #include <winbase.h>
 
+#include <wine/debug.h>
+WINE_DEFAULT_DEBUG_CHANNEL(telnetd);
+
 static Telnetd g_telnetd{};
 
 extern "C" TELNETD_STATUS kickoff_telnetd(HANDLE* out_worker_thread)
@@ -29,12 +32,41 @@ TELNETD_STATUS Telnetd::initialize()
 {
     OutputDebugStringA("telnetd: initialize called\n");
 
+    const auto wsa_status = WSAStartup(MAKEWORD(2,2), &m_wsa_data);
+    if(wsa_status != 0) {
+        ERR("winsock init failed with: %d\n", wsa_status);
+        terminate();
+        return TELNETD_STATUS_ERR_WINSCK_INIT;
+    }
+
     m_stop_event = CreateEventW(NULL, TRUE, FALSE, NULL);
     if(!m_stop_event) {
+        terminate();
         return TELNETD_STATUS_ERR_EVNT_CREATE;
     }
 
-    // IATODO: Create socket and bind
+    m_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if(m_socket == INVALID_SOCKET) {
+        ERR("winsock socket create failed with: %d\n", WSAGetLastError());
+        terminate();
+        return TELNETD_STATUS_ERR_SOCK_CREATE;
+    }
+
+    sockaddr_in sin{};
+    sin.sin_family = AF_INET;
+    sin.sin_port = htons(23);
+    sin.sin_addr.s_addr = htonl(INADDR_ANY);
+    if(bind(m_socket, (const sockaddr*)&sin, sizeof(sin)) == SOCKET_ERROR) {
+        ERR("winsock socket bind failed with: %d\n", WSAGetLastError());
+        terminate();
+        return TELNETD_STATUS_ERR_SOCK_BIND;
+    }
+
+    if(listen(m_socket, SOMAXCONN) == SOCKET_ERROR) {
+        ERR("winsock socket listen failed with: %d\n", WSAGetLastError());
+        terminate();
+        return TELNETD_STATUS_ERR_SOCK_LISTEN;
+    }
     
     DWORD thread_id{};
     m_worker_thread =  CreateThread(NULL, 
@@ -59,17 +91,24 @@ void Telnetd::terminate()
     if(m_stop_event) SetEvent(m_stop_event);
     if(m_worker_thread) WaitForSingleObject(m_worker_thread, INFINITE);
 
-    // IATODO: Cleanup socket
+    if(m_socket != INVALID_SOCKET) closesocket(m_socket);
+    m_socket = INVALID_SOCKET;
 
     if(m_stop_event) CloseHandle(m_stop_event);
     if(m_worker_thread) CloseHandle(m_worker_thread);
     m_worker_thread = NULL;
     m_stop_event = NULL;
+
+    if(m_wsa_data.wVersion) WSACleanup();
+    m_wsa_data.wVersion = 0;
 }
 
+// [IATODO]: Multi client support?
 TELNETD_STATUS Telnetd::serve()
 {
     OutputDebugStringA("telnetd: serve called\n");
+
+    // [IATODO] accept loop
 
     WaitForSingleObject(m_stop_event, INFINITE);
 

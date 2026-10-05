@@ -134,7 +134,6 @@ static void WINAPI serv_main(DWORD argc, LPWSTR *argv)
             worker_thread_ec = TELNETD_STATUS_ERR_UNKNOWN;
 
         shutdown_telnetd();
-        CloseHandle(stop_event);
 
         status.dwCurrentState     = SERVICE_STOPPED;
         status.dwControlsAccepted = 0;
@@ -143,17 +142,20 @@ static void WINAPI serv_main(DWORD argc, LPWSTR *argv)
         SetServiceStatus( service_handle, &status );
         WINE_TRACE( "telnetd exited unexpectedly: %d\n", worker_thread_ec );
 
+        CloseHandle(stop_event);
+
         return;
     } else if(wait_result == WAIT_FAILED) {
         status.dwWin32ExitCode = GetLastError();
 
         shutdown_telnetd();
-        CloseHandle(stop_event);
 
         status.dwCurrentState     = SERVICE_STOPPED;
         status.dwControlsAccepted = 0;
         SetServiceStatus( service_handle, &status );
         WINE_TRACE( "wait failed: %lu\n",  status.dwWin32ExitCode);
+
+        CloseHandle(stop_event);
 
         return;
     }
