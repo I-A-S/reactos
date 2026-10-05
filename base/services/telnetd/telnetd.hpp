@@ -21,19 +21,19 @@ typedef int TELNETD_STATUS;
 #define TELNETD_STATUS_ERR_UNKNOWN 7
 
 #ifdef __cplusplus
-extern "C"
+    #define EXTERN_C extern "C"
+#else
+    #define EXTERN_C
 #endif
-TELNETD_STATUS kickoff_telnetd(HANDLE* out_worker_thread);
+
+EXTERN_C TELNETD_STATUS kickoff_telnetd(HANDLE* out_worker_thread);
+EXTERN_C void shutdown_telnetd(void);
+
+#undef EXTERN_C
 
 #ifdef __cplusplus
-extern "C"
-#endif
-void shutdown_telnetd(void);
 
-#ifdef __cplusplus
-
-#define _INC_WINDOWS
-#include <winsock2.h>
+#include "tcpserver.hpp"
 
 class Telnetd
 {
@@ -52,7 +52,7 @@ private:
     WSADATA m_wsa_data{};
     SOCKET m_socket {INVALID_SOCKET};
     HANDLE m_worker_thread {NULL};
-    HANDLE m_stop_event {NULL};
+    HANDLE m_accept_event {NULL}, m_stop_event {NULL};
 };
 
 #endif

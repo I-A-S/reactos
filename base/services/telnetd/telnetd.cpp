@@ -45,6 +45,12 @@ TELNETD_STATUS Telnetd::initialize()
         return TELNETD_STATUS_ERR_EVNT_CREATE;
     }
 
+    m_accept_event = CreateEventW(NULL, TRUE, FALSE, NULL);
+    if(!m_accept_event) {
+        terminate();
+        return TELNETD_STATUS_ERR_EVNT_CREATE;
+    }
+
     m_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if(m_socket == INVALID_SOCKET) {
         ERR("winsock socket create failed with: %d\n", WSAGetLastError());
@@ -94,23 +100,29 @@ void Telnetd::terminate()
     if(m_socket != INVALID_SOCKET) closesocket(m_socket);
     m_socket = INVALID_SOCKET;
 
+    if(m_accept_event) CloseHandle(m_accept_event);
     if(m_stop_event) CloseHandle(m_stop_event);
     if(m_worker_thread) CloseHandle(m_worker_thread);
     m_worker_thread = NULL;
     m_stop_event = NULL;
+    m_accept_event = NULL;
 
     if(m_wsa_data.wVersion) WSACleanup();
     m_wsa_data.wVersion = 0;
 }
 
-// [IATODO]: Multi client support?
 TELNETD_STATUS Telnetd::serve()
 {
     OutputDebugStringA("telnetd: serve called\n");
 
-    // [IATODO] accept loop
+    WSAEventSelect(m_socket, m_accept_event, FD_ACCEPT);
 
-    WaitForSingleObject(m_stop_event, INFINITE);
+    HANDLE events[] = {m_stop_event, m_accept_event};
+    const auto wait_result = WaitForMultipleObjects(2, events, FALSE, INFINITE);
+    if (wait_result == WAIT_OBJECT_0)
+        return TELNETD_STATUS_OK;
+    else if (wait_result != (WAIT_OBJECT_0 + 1))
+        return TELNETD_STATUS_ERR_UNKNOWN;
 
     return TELNETD_STATUS_OK;
 }
