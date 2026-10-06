@@ -7,10 +7,12 @@
 
 #include "tcpserver.hpp"
 
+#include <ws2tcpip.h>
+
 #include <wine/debug.h>
 WINE_DEFAULT_DEBUG_CHANNEL(TCPServer);
 
-TCPServer::EStatus TCPServer::initialize()
+TCPServer::EStatus TCPServer::initialize(uint16_t port, const char* interface_addr)
 {
     WSADATA _wsa_data{};
     int result = WSAStartup(MAKEWORD(2,2), &_wsa_data);
@@ -37,6 +39,26 @@ TCPServer::EStatus TCPServer::initialize()
     m_session_data.events[0] = listen_event;
     m_session_data.sockets[0] = listen_socket;
     m_session_data.current_index = 1;
+
+    SOCKADDR_IN sin{};
+    sin.sin_family = AF_INET;
+    sin.sin_port = htons(port);
+    if(inet_pton(sin.sin_family, interface_addr, &sin.sin_addr) != 1) {
+        terminate();
+        return EStatus::INTERFACE_ADDR_PARSE_ERROR;
+    }
+
+    if(bind(listen_socket, (PSOCKADDR)&sin, sizeof(sin)) == SOCKET_ERROR) {
+        ERR("listen socket bind failed with: %d\n", WSAGetLastError());
+        terminate();
+        return EStatus::SOCKET_BIND_ERROR;
+    }
+
+    if(listen(listen_socket, SOMAXCONN) == SOCKET_ERROR) {
+        ERR("listen socket listen failed with: %d\n", WSAGetLastError());
+        terminate();
+        return EStatus::SOCKET_LISTEN_ERROR;
+    }
 }
 
 void TCPServer::terminate()

@@ -52,10 +52,11 @@ public:
         SOCKET_ACCEPT_ERROR,
         SOCKET_READ_ERROR,
         SOCKET_WRITE_ERROR,
+        INTERFACE_ADDR_PARSE_ERROR,
     };
 
 public:
-    EStatus initialize();
+    EStatus initialize(uint16_t port, const char* interface_addr = "0.0.0.0");
     void terminate();
 
     template<typename session_handler_type>
@@ -88,10 +89,7 @@ private:
 
             current_index = 0;
         }
-    };
-
-private:
-    SessionData m_session_data{};
+    } m_session_data{};
     BOOLEAN m_wsa_initialized{false};
 };
 
@@ -102,6 +100,12 @@ TCPServer::EStatus TCPServer::run()
         std::is_base_of<TCPServerSessionHandler, session_handler_type>::value, 
         "session_handler_type must implement TCPServerSessionHandler"
     );
+
+    while(true)
+    {
+        const auto idx = WSAWaitForMultipleEvents(m_session_data.current_index, m_session_data.events, FALSE, WSA_INFINITE, FALSE);
+
+    }
 
     return EStatus::OK;
 }
