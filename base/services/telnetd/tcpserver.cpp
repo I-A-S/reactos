@@ -7,12 +7,10 @@
 
 #include "tcpserver.hpp"
 
-#include <ws2tcpip.h>
-
 #include <wine/debug.h>
 WINE_DEFAULT_DEBUG_CHANNEL(TCPServer);
 
-TCPServer::EStatus TCPServer::initialize(uint16_t port, const char* interface_addr)
+TCPServer::EStatus TCPServer::initialize(uint16_t port, const char* interface_addr, HandlerFactoryFuncT handler_factory_func)
 {
     WSADATA _wsa_data{};
     int result = WSAStartup(MAKEWORD(2,2), &_wsa_data);
@@ -43,7 +41,9 @@ TCPServer::EStatus TCPServer::initialize(uint16_t port, const char* interface_ad
     SOCKADDR_IN sin{};
     sin.sin_family = AF_INET;
     sin.sin_port = htons(port);
-    if(inet_pton(sin.sin_family, interface_addr, &sin.sin_addr) != 1) {
+    sin.sin_addr.s_addr = inet_addr(interface_addr);
+    if(sin.sin_addr.s_addr == INADDR_NONE) {
+        ERR("invalid interface address: %s\n", interface_addr);
         terminate();
         return EStatus::INTERFACE_ADDR_PARSE_ERROR;
     }
@@ -59,6 +59,14 @@ TCPServer::EStatus TCPServer::initialize(uint16_t port, const char* interface_ad
         terminate();
         return EStatus::SOCKET_LISTEN_ERROR;
     }
+
+    if(WSAEventSelect(listen_socket, listen_event, FD_ACCEPT | FD_CLOSE) == SOCKET_ERROR) {
+        ERR("event select failed with: %d\n", WSAGetLastError());
+        terminate();
+        return EStatus::EVENT_SELECT_ERROR;
+    }
+
+    return EStatus::OK;
 }
 
 void TCPServer::terminate()
@@ -68,12 +76,12 @@ void TCPServer::terminate()
         if(m_session_data.sockets[i] != INVALID_SOCKET)
             closesocket(m_session_data.sockets[i]);
         
-        if(m_session_data.events[i] = WSA_INVALID_EVENT)
+        if(m_session_data.events[i] == WSA_INVALID_EVENT)
             WSACloseEvent(m_session_data.events[i]);
 
         if(m_session_data.handlers[i])
         {
-            m_session_data.handlers[i]->on_destory();
+            m_session_data.handlers[i]->on_destroy();
             delete m_session_data.handlers[i];
         }
     }
@@ -104,3 +112,34 @@ TCPServer::EStatus TCPServer::send_data_to_socket(SOCKET s, const void* data, DW
 
     return EStatus::OK;
 }
+
+TCPServer::EStatus TCPServer::run()
+{
+    while(true)
+    {
+        auto idx = WSAWaitForMultipleEvents(m_session_data.current_index, m_session_data.events, FALSE, WSA_INFINITE, FALSE);
+        if(idx == WSA_WAIT_FAILED) {
+            ERR("wsa multi wait failed with: %d\n", WSAGetLastError());
+            return EStatus::EVENT_WAIT_ERROR;
+        }
+        idx -= WSA_WAIT_EVENT_0;
+        
+        for(DWORD i = idx; i < m_session_data.current_index; i++)
+        {
+            const auto wait_result = WSAWaitForMultipleEvents(1, &m_session_data.events[i], TRUE, 0, FALSE);
+            if (
+                (wait_result == WSA_WAIT_FAILED) || 
+                (wait_result == WSA_WAIT_TIMEOUT)
+            )
+                continue;
+
+            WSANETWORKEVENTS net_events{};
+            WSAEnumNetworkEvents(m_session_data.sockets[i], m_session_data.events[i], &net_events);
+
+            
+        }
+    }
+
+    return EStatus::OK;
+}
+

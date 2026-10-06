@@ -11,12 +11,13 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include <windef.h>
+#include <winbase.h>
 
 #define _INC_WINDOWS
 #include <winsock2.h>
-
-#include <type_traits>
 
 class TCPServer;
 
@@ -24,7 +25,7 @@ class TCPServerSessionHandler
 {
 public:
     virtual void on_create(TCPServer* server);
-    virtual void on_destory();
+    virtual void on_destroy();
 
     virtual void on_connect(SOCKET s) = 0;
     virtual void on_disconnect() = 0;
@@ -46,6 +47,7 @@ public:
         WSA_INIT_ERROR,
         EVENT_WAIT_ERROR,
         EVENT_CREATE_ERROR,
+        EVENT_SELECT_ERROR,
         SOCKET_CREATE_ERROR,
         SOCKET_BIND_ERROR,
         SOCKET_LISTEN_ERROR,
@@ -55,17 +57,9 @@ public:
         INTERFACE_ADDR_PARSE_ERROR,
     };
 
-public:
-    EStatus initialize(uint16_t port, const char* interface_addr = "0.0.0.0");
-    void terminate();
-
-    template<typename session_handler_type>
-    EStatus run();
-
-public:
-    EStatus send_data_to_socket(SOCKET s, const void* data, DWORD& length);
-
 private:
+    using HandlerFactoryFuncT = TCPServerSessionHandler* (*)();
+
     struct SessionData
     {
         // +1 because we're gonna store the listen socket and event at index 0.
@@ -89,24 +83,27 @@ private:
 
             current_index = 0;
         }
-    } m_session_data{};
+    };
+
+public:
+    template<typename session_handler_type>
+    EStatus initialize(uint16_t port, const char* interface_addr = "0.0.0.0");
+
+    void terminate();
+
+    EStatus run();
+
+    EStatus send_data_to_socket(SOCKET s, const void* data, DWORD& length);
+
+private:
+    SessionData m_session_data{};
     BOOLEAN m_wsa_initialized{false};
+
+    EStatus initialize(uint16_t port, const char* interface_addr, HandlerFactoryFuncT handler_factory_func);
 };
 
 template<typename session_handler_type>
-TCPServer::EStatus TCPServer::run()
+TCPServer::EStatus TCPServer::initialize(uint16_t port, const char* interface_addr)
 {
-    static_assert(
-        std::is_base_of<TCPServerSessionHandler, session_handler_type>::value, 
-        "session_handler_type must implement TCPServerSessionHandler"
-    );
-
-    while(true)
-    {
-        const auto idx = WSAWaitForMultipleEvents(m_session_data.current_index, m_session_data.events, FALSE, WSA_INFINITE, FALSE);
-
-    }
-
-    return EStatus::OK;
+    return initialize(port, interface_addr, []() -> TCPServerSessionHandler* { return new session_handler_type(); });
 }
-
