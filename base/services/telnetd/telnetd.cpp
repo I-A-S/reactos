@@ -32,12 +32,7 @@ TELNETD_STATUS Telnetd::initialize()
 {
     OutputDebugStringA("telnetd: initialize called\n");
 
-    const auto wsa_status = WSAStartup(MAKEWORD(2,2), &m_wsa_data);
-    if(wsa_status != 0) {
-        ERR("winsock init failed with: %d\n", wsa_status);
-        terminate();
-        return TELNETD_STATUS_ERR_WINSCK_INIT;
-    }
+    
 
     m_stop_event = CreateEventW(NULL, TRUE, FALSE, NULL);
     if(!m_stop_event) {
@@ -106,9 +101,6 @@ void Telnetd::terminate()
     m_worker_thread = NULL;
     m_stop_event = NULL;
     m_accept_event = NULL;
-
-    if(m_wsa_data.wVersion) WSACleanup();
-    m_wsa_data.wVersion = 0;
 }
 
 TELNETD_STATUS Telnetd::serve()

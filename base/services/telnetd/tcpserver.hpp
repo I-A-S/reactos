@@ -23,7 +23,10 @@ class TCPServer;
 class TCPServerSessionHandler
 {
 public:
-    virtual void on_connect(TCPServer* server, SOCKET s) = 0;
+    virtual void on_create(TCPServer* server);
+    virtual void on_destory();
+
+    virtual void on_connect(SOCKET s) = 0;
     virtual void on_disconnect() = 0;
 
     virtual void on_data(const uint8_t* data, size_t length) = 0;
@@ -35,11 +38,14 @@ public:
     // [IANOTE]: For now, this should be less than or equal to WSA_MAXIMUM_WAIT_EVENTS,
     // which is typically 64. For our current ReactOS purposes, this is plenty.
     // Later we can perhaps look into thread managers or different architecture.
-    static constexpr uint32_t NUM_MAX_CONCURRENT_SESSIONS = 32;
+    static constexpr DWORD NUM_MAX_CONCURRENT_SESSIONS = 32;
 
     enum class EStatus
     {
         OK,
+        WSA_INIT_ERROR,
+        EVENT_WAIT_ERROR,
+        EVENT_CREATE_ERROR,
         SOCKET_CREATE_ERROR,
         SOCKET_BIND_ERROR,
         SOCKET_LISTEN_ERROR,
@@ -56,17 +62,37 @@ public:
     EStatus run();
 
 public:
-    void send_data_to_socket(SOCKET s, const uint8_t* data, size_t length);
+    EStatus send_data_to_socket(SOCKET s, const void* data, DWORD& length);
 
 private:
-    struct _SessionData {
+    struct SessionData
+    {
+        // +1 because we're gonna store the listen socket and event at index 0.
+        // handlers array gets a +1 too because otherwise indexing is going to
+        // be unnecessarily confusing.
+        static constexpr DWORD NUM_MAX_ENTRY_COUNT = NUM_MAX_CONCURRENT_SESSIONS + 1;
 
-        WSAEVENT event{NULL};
-        SOCKET socket{INVALID_SOCKET};
-        TCPServerSessionHandler* handler{};
-    } m_session_data[NUM_MAX_CONCURRENT_SESSIONS];
-    
-    DWORD m_session_count{}; 
+        WSAEVENT events[NUM_MAX_ENTRY_COUNT];
+        SOCKET sockets[NUM_MAX_ENTRY_COUNT];
+        TCPServerSessionHandler* handlers[NUM_MAX_ENTRY_COUNT];
+        
+        DWORD current_index{};
+
+        SessionData() {
+            for(DWORD i = 0; i < NUM_MAX_ENTRY_COUNT; i++)
+            {
+                events[i] = WSA_INVALID_EVENT;
+                sockets[i] = INVALID_SOCKET;
+                handlers[i] = nullptr;
+            }
+
+            current_index = 0;
+        }
+    };
+
+private:
+    SessionData m_session_data{};
+    BOOLEAN m_wsa_initialized{false};
 };
 
 template<typename session_handler_type>
@@ -79,3 +105,4 @@ TCPServer::EStatus TCPServer::run()
 
     return EStatus::OK;
 }
+
