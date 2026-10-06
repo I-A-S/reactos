@@ -10,8 +10,10 @@
 #include <wine/debug.h>
 WINE_DEFAULT_DEBUG_CHANNEL(TCPServer);
 
-TCPServer::EStatus TCPServer::initialize(uint16_t port, const char* interface_addr, HandlerFactoryFuncT handler_factory_func)
+TCPServer::EStatus TCPServer::initialize(uint16_t port, const char* interface_addr, HandlerFactoryFuncT handler_factory)
 {
+    m_handler_factory = handler_factory;
+
     WSADATA _wsa_data{};
     int result = WSAStartup(MAKEWORD(2,2), &_wsa_data);
     if(result != 0) {
@@ -81,7 +83,7 @@ void TCPServer::terminate()
 
         if(m_session_data.handlers[i])
         {
-            m_session_data.handlers[i]->on_destroy();
+            m_session_data.handlers[i]->on_disconnect();
             delete m_session_data.handlers[i];
         }
     }
@@ -115,6 +117,8 @@ TCPServer::EStatus TCPServer::send_data_to_socket(SOCKET s, const void* data, DW
 
 TCPServer::EStatus TCPServer::run()
 {
+    CHAR read_buffer[1024];
+
     while(true)
     {
         auto idx = WSAWaitForMultipleEvents(m_session_data.current_index, m_session_data.events, FALSE, WSA_INFINITE, FALSE);
@@ -136,7 +140,86 @@ TCPServer::EStatus TCPServer::run()
             WSANETWORKEVENTS net_events{};
             WSAEnumNetworkEvents(m_session_data.sockets[i], m_session_data.events[i], &net_events);
 
-            
+            if (net_events.lNetworkEvents & FD_ACCEPT)
+            {
+                if (net_events.iErrorCode[FD_ACCEPT_BIT] != 0) {
+                    ERR("network accept event failed with: %d\n", net_events.iErrorCode[FD_ACCEPT_BIT]);
+                    continue;
+                }
+
+                const auto client_socket = accept(m_session_data.sockets[i], NULL, NULL);
+                if(client_socket == INVALID_SOCKET) {
+                    ERR("client socket accept failed with: %d\n", WSAGetLastError());
+                    continue;
+                }
+
+                if(m_session_data.current_index >= WSA_MAXIMUM_WAIT_EVENTS) {
+                    ERR("cannot accept anymore connections.. dropping the latest :((\n");
+                    closesocket(client_socket);
+                    continue;
+                }
+
+                const auto client_event = WSACreateEvent();
+                if(client_event == WSA_INVALID_EVENT) {
+                    ERR("client event create with: %d\n", WSAGetLastError());
+                    closesocket(client_socket);
+                    continue;
+                }
+
+                if(WSAEventSelect(client_socket, client_event, FD_READ | FD_WRITE | FD_CLOSE) == SOCKET_ERROR) {
+                    ERR("client event select with: %d\n", WSAGetLastError());
+                    closesocket(client_socket);
+                    continue;
+                }
+
+                const auto handler = m_handler_factory();
+                
+                handler->on_connect(this, client_socket);
+
+                m_session_data.events[m_session_data.current_index] = client_event;
+                m_session_data.sockets[m_session_data.current_index] = client_socket;
+                m_session_data.handlers[m_session_data.current_index] = handler;
+                m_session_data.current_index++;
+            }
+
+            if (net_events.lNetworkEvents & FD_CLOSE)
+            {
+                if (net_events.iErrorCode[FD_CLOSE_BIT] != 0) {
+                    ERR("network close event failed with: %d\n", net_events.iErrorCode[FD_CLOSE_BIT]);
+                }
+
+                closesocket(m_session_data.sockets[i]);
+                WSACloseEvent(m_session_data.events[i]);
+                m_session_data.handlers[i]->on_disconnect();
+                delete m_session_data.handlers[i];
+
+                m_session_data.sockets[i] = NULL;
+                m_session_data.events[i] = NULL;
+                m_session_data.handlers[i] = nullptr;
+
+                for(DWORD j = i; j < m_session_data.current_index - 1; j++) {
+                    m_session_data.sockets[j] = m_session_data.sockets[j + 1];
+                    m_session_data.events[j] = m_session_data.events[j + 1];
+                    m_session_data.handlers[j] = m_session_data.handlers[j + 1];
+                }
+
+                m_session_data.current_index--;
+                i--;
+            }
+
+            if (net_events.lNetworkEvents & FD_READ)
+            {
+                if (net_events.iErrorCode[FD_READ_BIT] != 0) {
+                    ERR("network read event failed with: %d\n", net_events.iErrorCode[FD_READ_BIT]);
+                } else {
+                    const auto read_count = recv(m_session_data.sockets[i], read_buffer, 
+                            sizeof(read_buffer) - 1, 0);
+                    if(read_count > 0) {
+                        read_buffer[read_count] = '\0';
+                        m_session_data.handlers[i]->on_data((uint8_t*)read_buffer, read_count);
+                    }
+                }
+            }
         }
     }
 

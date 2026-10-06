@@ -24,10 +24,7 @@ class TCPServer;
 class TCPServerSessionHandler
 {
 public:
-    virtual void on_create(TCPServer* server);
-    virtual void on_destroy();
-
-    virtual void on_connect(SOCKET s) = 0;
+    virtual void on_connect(TCPServer* server, SOCKET s) = 0;
     virtual void on_disconnect() = 0;
 
     virtual void on_data(const uint8_t* data, size_t length) = 0;
@@ -98,8 +95,9 @@ public:
 private:
     SessionData m_session_data{};
     BOOLEAN m_wsa_initialized{false};
+    HandlerFactoryFuncT m_handler_factory{};
 
-    EStatus initialize(uint16_t port, const char* interface_addr, HandlerFactoryFuncT handler_factory_func);
+    EStatus initialize(uint16_t port, const char* interface_addr, HandlerFactoryFuncT handler_factory);
 };
 
 template<typename session_handler_type>
