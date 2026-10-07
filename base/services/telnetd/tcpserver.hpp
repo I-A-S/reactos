@@ -24,6 +24,8 @@ class TCPServer;
 class TCPServerSessionHandler
 {
 public:
+    virtual ~TCPServerSessionHandler() = default;
+
     virtual void on_connect(TCPServer* server, SOCKET s) = 0;
     virtual void on_disconnect() = 0;
 
@@ -33,9 +35,6 @@ public:
 class TCPServer
 {
 public:
-    // [IANOTE]: For now, this should be less than or equal to WSA_MAXIMUM_WAIT_EVENTS,
-    // which is typically 64. For our current ReactOS purposes, this is plenty.
-    // Later we can perhaps look into thread managers or different architecture.
     static constexpr DWORD NUM_MAX_CONCURRENT_SESSIONS = 32;
 
     enum class EStatus
@@ -64,7 +63,13 @@ private:
         // be unnecessarily confusing.
         static constexpr DWORD NUM_MAX_ENTRY_COUNT = NUM_MAX_CONCURRENT_SESSIONS + 1;
 
-        WSAEVENT events[NUM_MAX_ENTRY_COUNT];
+        // [IANOTE]: For now, NUM_MAX_ENTRY_COUNT should be less than or equal to 
+        // WSA_MAXIMUM_WAIT_EVENTS, which is typically 64. For our current ReactOS purposes,
+        // this is plenty. Later we can perhaps look into thread managers or different architecture.
+        static_assert(NUM_MAX_ENTRY_COUNT <= WSA_MAXIMUM_WAIT_EVENTS,
+            "NUM_MAX_ENTRY_COUNT must be less than or equal to WSA_MAXIMUM_WAIT_EVENTS");
+
+        WSAEVENT events[NUM_MAX_ENTRY_COUNT + 1]; // +1 for stop event (at index NUM_MAX_ENTRY_COUNT)
         SOCKET sockets[NUM_MAX_ENTRY_COUNT];
         TCPServerSessionHandler* handlers[NUM_MAX_ENTRY_COUNT];
         
@@ -79,6 +84,7 @@ private:
             }
 
             current_index = 0;
+            events[NUM_MAX_ENTRY_COUNT] = WSA_INVALID_EVENT;
         }
     };
 
@@ -89,6 +95,8 @@ public:
     void terminate();
 
     EStatus run();
+
+    BOOL request_stop();
 
     EStatus send_data_to_socket(SOCKET s, const void* data, DWORD& length);
 
