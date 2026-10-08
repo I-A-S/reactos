@@ -15,6 +15,7 @@
 
 #include <windef.h>
 #include <winbase.h>
+#include <synchapi.h>
 
 #define _INC_WINDOWS
 #include <winsock2.h>
@@ -37,13 +38,15 @@ protected:
     TCPServer* m_server{};
     SOCKET m_socket{INVALID_SOCKET};
 
-    bool send_data(const void* data, size_t length) { return _internal_send_data(data, length, true) == length; }
+    bool send_data(const void* data, size_t length) { return _internal_send_data(data, length, true) == 0; }
 
 private:
     std::vector<uint8_t> m_send_queue{};
     size_t m_send_queue_cursor{};
+    CRITICAL_SECTION m_send_queue_cs{};
 
     void _internal_on_connect(TCPServer* server, SOCKET s);
+    void _internal_on_disconnect();
 
     size_t _internal_send_data(const void* data, size_t length, bool allow_queue);
 

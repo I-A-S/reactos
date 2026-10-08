@@ -17,14 +17,33 @@ void TCPServerSessionHandler::_internal_on_connect(TCPServer* server, SOCKET s)
     m_server = server;
     m_socket = s;
 
-    m_send_queue.resize(SEND_QUEUE_PREALLOCATED_SIZE);
+    m_send_queue.reserve(SEND_QUEUE_PREALLOCATED_SIZE);
+
+    InitializeCriticalSection(&m_send_queue_cs);
 
     on_connect();
+}
+
+void TCPServerSessionHandler::_internal_on_disconnect()
+{
+    on_disconnect();
+
+    DeleteCriticalSection(&m_send_queue_cs);
 }
 
 size_t TCPServerSessionHandler::_internal_send_data(const void* data, size_t length, bool allow_queue)
 {
     const char* buffer = (const char*)data;
+
+    if(m_send_queue_cursor) {
+        EnterCriticalSection(&m_send_queue_cs);
+        if(m_send_queue_cursor + length > m_send_queue.size())
+            m_send_queue.resize(m_send_queue_cursor + length);
+        RtlCopyMemory(&m_send_queue[m_send_queue_cursor], buffer, length);
+        m_send_queue_cursor += length;
+        LeaveCriticalSection(&m_send_queue_cs);
+        return 0;
+    }
 
     while(length > 0)
     {
@@ -34,10 +53,12 @@ size_t TCPServerSessionHandler::_internal_send_data(const void* data, size_t len
             const auto error = WSAGetLastError();
             if(error == WSAEWOULDBLOCK) {
                 if(!allow_queue) return length;
+                EnterCriticalSection(&m_send_queue_cs);
                 if(m_send_queue_cursor + length > m_send_queue.size())
                     m_send_queue.resize(m_send_queue_cursor + length);
                 RtlCopyMemory(&m_send_queue[m_send_queue_cursor], buffer, length);
                 m_send_queue_cursor += length;
+                LeaveCriticalSection(&m_send_queue_cs);
                 return 0;
             }
             ERR("socket send failed with: %d\n", error);
@@ -133,12 +154,10 @@ void TCPServer::terminate()
 
         if(m_session_data.handlers[i])
         {
-            m_session_data.handlers[i]->on_disconnect();
+            m_session_data.handlers[i]->_internal_on_disconnect();
             delete m_session_data.handlers[i];
         }
     }
-    if(m_session_data.events[SessionData::NUM_MAX_ENTRY_COUNT] != WSA_INVALID_EVENT)
-        WSACloseEvent(m_session_data.events[SessionData::NUM_MAX_ENTRY_COUNT]);
     m_session_data = {};
 
     if(m_wsa_initialized) 
@@ -248,8 +267,15 @@ TCPServer::EStatus TCPServer::run()
                     ERR("network write event failed with: %d\n", net_events.iErrorCode[FD_WRITE_BIT]);
                 } else {
                     const auto handler = m_session_data.handlers[i];
-                    handler->m_send_queue_cursor = 
+                    const auto remaining = 
                         handler->_internal_send_data(handler->m_send_queue.data(), handler->m_send_queue_cursor, false);
+                    if (remaining && remaining != handler->m_send_queue_cursor) {
+                        RtlCopyMemory(&handler->m_send_queue[0], 
+                            &handler->m_send_queue[handler->m_send_queue_cursor - remaining], 
+                            remaining
+                        );
+                    }
+                    handler->m_send_queue_cursor = remaining;
                 }
             }
 
@@ -269,7 +295,7 @@ TCPServer::EStatus TCPServer::run()
 
                 closesocket(m_session_data.sockets[i]);
                 WSACloseEvent(m_session_data.events[i]);
-                m_session_data.handlers[i]->on_disconnect();
+                m_session_data.handlers[i]->_internal_on_disconnect();
                 delete m_session_data.handlers[i];
 
                 for(DWORD j = i; j < m_session_data.current_index - 1; j++) {

@@ -9,7 +9,7 @@ add_executable(telnetd
     telnetd.rc
 )
 
-target_link_libraries(telnetd wine cpprt)
+target_link_libraries(telnetd wine cppstl)
 
 set_module_type(telnetd win32cui)
 
