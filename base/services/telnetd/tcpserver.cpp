@@ -10,6 +10,47 @@
 #include <wine/debug.h>
 WINE_DEFAULT_DEBUG_CHANNEL(TCPServer);
 
+static constexpr size_t SEND_QUEUE_PREALLOCATED_SIZE = 1024;
+
+void TCPServerSessionHandler::_internal_on_connect(TCPServer* server, SOCKET s)
+{
+    m_server = server;
+    m_socket = s;
+
+    m_send_queue.resize(SEND_QUEUE_PREALLOCATED_SIZE);
+
+    on_connect();
+}
+
+size_t TCPServerSessionHandler::_internal_send_data(const void* data, size_t length, bool allow_queue)
+{
+    const char* buffer = (const char*)data;
+
+    while(length > 0)
+    {
+        const auto result = send(m_socket, buffer, length, 0);
+
+        if(result == SOCKET_ERROR) {
+            const auto error = WSAGetLastError();
+            if(error == WSAEWOULDBLOCK) {
+                if(!allow_queue) return length;
+                if(m_send_queue_cursor + length > m_send_queue.size())
+                    m_send_queue.resize(m_send_queue_cursor + length);
+                RtlCopyMemory(&m_send_queue[m_send_queue_cursor], buffer, length);
+                m_send_queue_cursor += length;
+                return 0;
+            }
+            ERR("socket send failed with: %d\n", error);
+            return length;
+        }
+
+        buffer += result;
+        length -= result;
+    }
+
+    return 0;
+}
+
 TCPServer::EStatus TCPServer::initialize(uint16_t port, const char* interface_addr, HandlerFactoryFuncT handler_factory)
 {
     m_handler_factory = handler_factory;
@@ -29,7 +70,8 @@ TCPServer::EStatus TCPServer::initialize(uint16_t port, const char* interface_ad
         terminate();
         return EStatus::EVENT_CREATE_ERROR;
     }
-    m_session_data.events[SessionData::NUM_MAX_ENTRY_COUNT] = stop_event;
+    m_session_data.events[0] = stop_event;
+    m_session_data.current_index = 1;
 
     const auto listen_event = WSACreateEvent();
     if(listen_event == WSA_INVALID_EVENT) {
@@ -44,9 +86,9 @@ TCPServer::EStatus TCPServer::initialize(uint16_t port, const char* interface_ad
         terminate();
         return EStatus::SOCKET_CREATE_ERROR;
     }
-    m_session_data.events[0] = listen_event;
-    m_session_data.sockets[0] = listen_socket;
-    m_session_data.current_index = 1;
+    m_session_data.events[1] = listen_event;
+    m_session_data.sockets[1] = listen_socket;
+    m_session_data.current_index = 2;
 
     SOCKADDR_IN sin{};
     sin.sin_family = AF_INET;
@@ -108,27 +150,7 @@ void TCPServer::terminate()
 
 BOOL TCPServer::request_stop()
 {
-    return WSASetEvent(m_session_data.events[SessionData::NUM_MAX_ENTRY_COUNT]);
-}
-
-TCPServer::EStatus TCPServer::send_data_to_socket(SOCKET s, const void* data, DWORD& length)
-{
-    const char* buffer = (const char*)data;
-
-    while(length > 0)
-    {
-        const auto result = send(s, buffer, length, 0);
-
-        if(result == SOCKET_ERROR) {
-            ERR("socket send failed with: %d\n", WSAGetLastError());
-            return EStatus::SOCKET_WRITE_ERROR;
-        }
-
-        buffer += result;
-        length -= result;
-    }
-
-    return EStatus::OK;
+    return WSASetEvent(m_session_data.events[0]);
 }
 
 TCPServer::EStatus TCPServer::run()
@@ -145,7 +167,7 @@ TCPServer::EStatus TCPServer::run()
         idx -= WSA_WAIT_EVENT_0;
 
         // This is stop event
-        if(idx == SessionData::NUM_MAX_ENTRY_COUNT) break;
+        if(idx == 0) break;
         
         for(DWORD i = idx; i < m_session_data.current_index; i++)
         {
@@ -159,7 +181,7 @@ TCPServer::EStatus TCPServer::run()
             WSANETWORKEVENTS net_events{};
             WSAEnumNetworkEvents(m_session_data.sockets[i], m_session_data.events[i], &net_events);
 
-            if (!i) {
+            if (i == 1) {
                 if (net_events.lNetworkEvents & FD_ACCEPT)
                 {
                     if (net_events.iErrorCode[FD_ACCEPT_BIT] != 0) {
@@ -195,7 +217,7 @@ TCPServer::EStatus TCPServer::run()
 
                     const auto handler = m_handler_factory();
 
-                    handler->on_connect(this, client_socket);
+                    handler->_internal_on_connect(this, client_socket);
 
                     m_session_data.events[m_session_data.current_index] = client_event;
                     m_session_data.sockets[m_session_data.current_index] = client_socket;
@@ -217,6 +239,17 @@ TCPServer::EStatus TCPServer::run()
                         read_buffer[read_count] = '\0';
                         m_session_data.handlers[i]->on_data((uint8_t*)read_buffer, read_count);
                     }
+                }
+            }
+
+            if (net_events.lNetworkEvents & FD_WRITE)
+            {
+                if (net_events.iErrorCode[FD_WRITE_BIT] != 0) {
+                    ERR("network write event failed with: %d\n", net_events.iErrorCode[FD_WRITE_BIT]);
+                } else {
+                    const auto handler = m_session_data.handlers[i];
+                    handler->m_send_queue_cursor = 
+                        handler->_internal_send_data(handler->m_send_queue.data(), handler->m_send_queue_cursor, false);
                 }
             }
 

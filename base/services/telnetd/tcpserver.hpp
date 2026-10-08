@@ -19,6 +19,8 @@
 #define _INC_WINDOWS
 #include <winsock2.h>
 
+#include <vector>
+
 class TCPServer;
 
 class TCPServerSessionHandler
@@ -26,10 +28,26 @@ class TCPServerSessionHandler
 public:
     virtual ~TCPServerSessionHandler() = default;
 
-    virtual void on_connect(TCPServer* server, SOCKET s) = 0;
+    virtual void on_connect() = 0;
     virtual void on_disconnect() = 0;
 
     virtual void on_data(const uint8_t* data, size_t length) = 0;
+
+protected:
+    TCPServer* m_server{};
+    SOCKET m_socket{INVALID_SOCKET};
+
+    bool send_data(const void* data, size_t length) { return _internal_send_data(data, length, true) == length; }
+
+private:
+    std::vector<uint8_t> m_send_queue{};
+    size_t m_send_queue_cursor{};
+
+    void _internal_on_connect(TCPServer* server, SOCKET s);
+
+    size_t _internal_send_data(const void* data, size_t length, bool allow_queue);
+
+    friend class TCPServer;
 };
 
 class TCPServer
@@ -58,10 +76,11 @@ private:
 
     struct SessionData
     {
-        // +1 because we're gonna store the listen socket and event at index 0.
-        // handlers array gets a +1 too because otherwise indexing is going to
-        // be unnecessarily confusing.
-        static constexpr DWORD NUM_MAX_ENTRY_COUNT = NUM_MAX_CONCURRENT_SESSIONS + 1;
+        // +2 because we're gonna store the stop event at index 0, and listen socket and event 
+        // at index 1. 
+        // handlers array gets 2 wasted slots and sockets array gets 1, however that is worth it 
+        // as otherwise indexing is going to be unnecessarily confusing.
+        static constexpr DWORD NUM_MAX_ENTRY_COUNT = NUM_MAX_CONCURRENT_SESSIONS + 2;
 
         // [IANOTE]: For now, NUM_MAX_ENTRY_COUNT should be less than or equal to 
         // WSA_MAXIMUM_WAIT_EVENTS, which is typically 64. For our current ReactOS purposes,
@@ -69,7 +88,7 @@ private:
         static_assert(NUM_MAX_ENTRY_COUNT <= WSA_MAXIMUM_WAIT_EVENTS,
             "NUM_MAX_ENTRY_COUNT must be less than or equal to WSA_MAXIMUM_WAIT_EVENTS");
 
-        WSAEVENT events[NUM_MAX_ENTRY_COUNT + 1]; // +1 for stop event (at index NUM_MAX_ENTRY_COUNT)
+        WSAEVENT events[NUM_MAX_ENTRY_COUNT];
         SOCKET sockets[NUM_MAX_ENTRY_COUNT];
         TCPServerSessionHandler* handlers[NUM_MAX_ENTRY_COUNT];
         
@@ -84,7 +103,6 @@ private:
             }
 
             current_index = 0;
-            events[NUM_MAX_ENTRY_COUNT] = WSA_INVALID_EVENT;
         }
     };
 
@@ -97,8 +115,6 @@ public:
     EStatus run();
 
     BOOL request_stop();
-
-    EStatus send_data_to_socket(SOCKET s, const void* data, DWORD& length);
 
 private:
     SessionData m_session_data{};
