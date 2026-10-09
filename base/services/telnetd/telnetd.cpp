@@ -6,6 +6,7 @@
  */
 
 #include "telnetd.hpp"
+#include "telnet_session.hpp"
 
 #include <winbase.h>
 
@@ -94,29 +95,4 @@ TELNETD_STATUS Telnetd::serve()
 DWORD WINAPI Telnetd::worker_thread_func(LPVOID self)
 {
     return ((Telnetd*)self)->serve();
-}
-
-// [IATODO] move this to a new file
-
-void TelnetSessionHandler::on_connect()
-{
-    OutputDebugStringA("telnetd: client connected!\n");
-}
-
-void TelnetSessionHandler::on_disconnect()
-{
-    OutputDebugStringA("telnetd: client disconnected.\n");
-}
-
-void TelnetSessionHandler::on_data(const uint8_t* data, size_t length)
-{
-    OutputDebugStringA("telnetd: got data:");
-    CHAR buf[256];
-    const auto buf_len = min((size_t)255, length);
-    RtlCopyMemory(buf, data, buf_len);
-    buf[buf_len] = '\0';
-    OutputDebugStringA(buf);
-    OutputDebugStringA("\n");
-    
-    send_data(data, length);
 }

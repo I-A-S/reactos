@@ -30,16 +30,6 @@ EXTERN_C void shutdown_telnetd(void);
 
 #include "tcpserver.hpp"
 
-class TelnetSessionHandler: public TCPServerSessionHandler
-{
-public:
-    void on_connect() override;
-
-    void on_disconnect() override;
-
-    void on_data(const uint8_t* data, size_t length) override;
-};
-
 class Telnetd
 {
     static DWORD WINAPI worker_thread_func(LPVOID self);
