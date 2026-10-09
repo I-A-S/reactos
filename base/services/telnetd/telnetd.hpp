@@ -15,25 +15,30 @@ typedef int TELNETD_STATUS;
 #define TELNETD_STATUS_ERR_SOCK_CREATE 1
 #define TELNETD_STATUS_ERR_SOCK_BIND 2
 #define TELNETD_STATUS_ERR_SOCK_LISTEN 3
-#define TELNETD_STATUS_ERR_THRD_CREATE 4
-#define TELNETD_STATUS_ERR_EVNT_CREATE 5
-#define TELNETD_STATUS_ERR_WINSCK_INIT 6
-#define TELNETD_STATUS_ERR_UNKNOWN 7
-
-#ifdef __cplusplus
-    #define EXTERN_C extern "C"
-#else
-    #define EXTERN_C
-#endif
+#define TELNETD_STATUS_ERR_SOCK_ACCEPT 4
+#define TELNETD_STATUS_ERR_SOCK_READ 5
+#define TELNETD_STATUS_ERR_SOCK_WRITE 6
+#define TELNETD_STATUS_ERR_THRD 7
+#define TELNETD_STATUS_ERR_EVNT 8
+#define TELNETD_STATUS_ERR_WINSCK 9
+#define TELNETD_STATUS_ERR_UNKNOWN 10
 
 EXTERN_C TELNETD_STATUS kickoff_telnetd(HANDLE* out_worker_thread);
 EXTERN_C void shutdown_telnetd(void);
 
-#undef EXTERN_C
-
 #ifdef __cplusplus
 
 #include "tcpserver.hpp"
+
+class TelnetSessionHandler: public TCPServerSessionHandler
+{
+public:
+    void on_connect() override;
+
+    void on_disconnect() override;
+
+    void on_data(const uint8_t* data, size_t length) override;
+};
 
 class Telnetd
 {
@@ -49,10 +54,8 @@ private:
     TELNETD_STATUS serve();
 
 private:
-    WSADATA m_wsa_data{};
-    SOCKET m_socket {INVALID_SOCKET};
+    TCPServer m_tcp_server{};
     HANDLE m_worker_thread {NULL};
-    HANDLE m_accept_event {NULL}, m_stop_event {NULL};
 };
 
 #endif

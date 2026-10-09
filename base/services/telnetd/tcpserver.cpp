@@ -12,64 +12,70 @@ WINE_DEFAULT_DEBUG_CHANNEL(TCPServer);
 
 static constexpr size_t SEND_QUEUE_PREALLOCATED_SIZE = 1024;
 
+TCPServerSessionHandler::TCPServerSessionHandler()
+{
+    m_send_queue.reserve(SEND_QUEUE_PREALLOCATED_SIZE);
+    InitializeCriticalSection(&m_send_queue_cs);
+}
+
+TCPServerSessionHandler::~TCPServerSessionHandler()
+{
+    DeleteCriticalSection(&m_send_queue_cs);
+}
+
 void TCPServerSessionHandler::_internal_on_connect(TCPServer* server, SOCKET s)
 {
     m_server = server;
     m_socket = s;
 
-    m_send_queue.reserve(SEND_QUEUE_PREALLOCATED_SIZE);
-
-    InitializeCriticalSection(&m_send_queue_cs);
-
     on_connect();
 }
 
-void TCPServerSessionHandler::_internal_on_disconnect()
+void TCPServerSessionHandler::send_data(const void* data, size_t length)
 {
-    on_disconnect();
+    EnterCriticalSection(&m_send_queue_cs);
 
-    DeleteCriticalSection(&m_send_queue_cs);
+    if(m_send_queue_cursor + length > m_send_queue.size())
+        m_send_queue.resize(m_send_queue_cursor + length);
+    RtlCopyMemory(&m_send_queue[m_send_queue_cursor], data, length);
+    m_send_queue_cursor += length;
+
+    _internal_flush_send_queue(false);
+
+    LeaveCriticalSection(&m_send_queue_cs);
 }
 
-size_t TCPServerSessionHandler::_internal_send_data(const void* data, size_t length, bool allow_queue)
+bool TCPServerSessionHandler::_internal_flush_send_queue(bool lock )
 {
-    const char* buffer = (const char*)data;
+    if (lock) EnterCriticalSection(&m_send_queue_cs);
 
-    if(m_send_queue_cursor) {
-        EnterCriticalSection(&m_send_queue_cs);
-        if(m_send_queue_cursor + length > m_send_queue.size())
-            m_send_queue.resize(m_send_queue_cursor + length);
-        RtlCopyMemory(&m_send_queue[m_send_queue_cursor], buffer, length);
-        m_send_queue_cursor += length;
-        LeaveCriticalSection(&m_send_queue_cs);
-        return 0;
-    }
+    const char* buffer = (const char*)m_send_queue.data();
 
-    while(length > 0)
+    DWORD sent{0};
+    while(m_send_queue_cursor > 0)
     {
-        const auto result = send(m_socket, buffer, length, 0);
+        const auto result = send(m_socket, buffer, (int)m_send_queue_cursor, 0);
 
         if(result == SOCKET_ERROR) {
+            m_send_queue.erase(m_send_queue.begin(), m_send_queue.begin() + sent);
             const auto error = WSAGetLastError();
             if(error == WSAEWOULDBLOCK) {
-                if(!allow_queue) return length;
-                EnterCriticalSection(&m_send_queue_cs);
-                if(m_send_queue_cursor + length > m_send_queue.size())
-                    m_send_queue.resize(m_send_queue_cursor + length);
-                RtlCopyMemory(&m_send_queue[m_send_queue_cursor], buffer, length);
-                m_send_queue_cursor += length;
-                LeaveCriticalSection(&m_send_queue_cs);
-                return 0;
+                if (lock) LeaveCriticalSection(&m_send_queue_cs);
+                return true;
             }
             ERR("socket send failed with: %d\n", error);
-            return length;
+            if (lock) LeaveCriticalSection(&m_send_queue_cs);
+            return false;
         }
 
         buffer += result;
-        length -= result;
+        sent += result;
+        m_send_queue_cursor -= result;
     }
 
-    return 0;
+    if (lock) LeaveCriticalSection(&m_send_queue_cs);
+
+    return true;
 }
 
 TCPServer::EStatus TCPServer::initialize(uint16_t port, const char* interface_addr, HandlerFactoryFuncT handler_factory)
@@ -154,7 +160,7 @@ void TCPServer::terminate()
 
         if(m_session_data.handlers[i])
         {
-            m_session_data.handlers[i]->_internal_on_disconnect();
+            m_session_data.handlers[i]->on_disconnect();
             delete m_session_data.handlers[i];
         }
     }
@@ -266,16 +272,7 @@ TCPServer::EStatus TCPServer::run()
                 if (net_events.iErrorCode[FD_WRITE_BIT] != 0) {
                     ERR("network write event failed with: %d\n", net_events.iErrorCode[FD_WRITE_BIT]);
                 } else {
-                    const auto handler = m_session_data.handlers[i];
-                    const auto remaining = 
-                        handler->_internal_send_data(handler->m_send_queue.data(), handler->m_send_queue_cursor, false);
-                    if (remaining && remaining != handler->m_send_queue_cursor) {
-                        RtlCopyMemory(&handler->m_send_queue[0], 
-                            &handler->m_send_queue[handler->m_send_queue_cursor - remaining], 
-                            remaining
-                        );
-                    }
-                    handler->m_send_queue_cursor = remaining;
+                    m_session_data.handlers[i]->_internal_flush_send_queue();
                 }
             }
 
@@ -295,7 +292,7 @@ TCPServer::EStatus TCPServer::run()
 
                 closesocket(m_session_data.sockets[i]);
                 WSACloseEvent(m_session_data.events[i]);
-                m_session_data.handlers[i]->_internal_on_disconnect();
+                m_session_data.handlers[i]->on_disconnect();
                 delete m_session_data.handlers[i];
 
                 for(DWORD j = i; j < m_session_data.current_index - 1; j++) {

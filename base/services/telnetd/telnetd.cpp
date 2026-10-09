@@ -12,6 +12,8 @@
 #include <wine/debug.h>
 WINE_DEFAULT_DEBUG_CHANNEL(telnetd);
 
+static constexpr uint16_t TELNET_PORT = 23;
+
 static Telnetd g_telnetd{};
 
 extern "C" TELNETD_STATUS kickoff_telnetd(HANDLE* out_worker_thread)
@@ -28,58 +30,47 @@ extern "C" void shutdown_telnetd(void)
     g_telnetd.terminate();
 }
 
+static TELNETD_STATUS tcp_server_status_to_telnetd(TCPServer::EStatus status)
+{
+    switch(status)
+    {
+        case TCPServer::EStatus::OK: return TELNETD_STATUS_OK;
+     
+        case TCPServer::EStatus::WSA_INIT_ERROR: return TELNETD_STATUS_ERR_WINSCK;
+        case TCPServer::EStatus::EVENT_WAIT_ERROR: return TELNETD_STATUS_ERR_EVNT;
+        case TCPServer::EStatus::EVENT_CREATE_ERROR: return TELNETD_STATUS_ERR_EVNT;
+        case TCPServer::EStatus::EVENT_SELECT_ERROR: return TELNETD_STATUS_ERR_EVNT;
+        case TCPServer::EStatus::SOCKET_CREATE_ERROR: return TELNETD_STATUS_ERR_SOCK_CREATE;
+        case TCPServer::EStatus::SOCKET_BIND_ERROR: return TELNETD_STATUS_ERR_SOCK_BIND;
+        case TCPServer::EStatus::SOCKET_LISTEN_ERROR: return TELNETD_STATUS_ERR_SOCK_LISTEN;
+        case TCPServer::EStatus::SOCKET_ACCEPT_ERROR: return TELNETD_STATUS_ERR_SOCK_ACCEPT;
+        case TCPServer::EStatus::SOCKET_READ_ERROR: return TELNETD_STATUS_ERR_SOCK_READ;
+        case TCPServer::EStatus::SOCKET_WRITE_ERROR: return TELNETD_STATUS_ERR_SOCK_WRITE;
+
+        default:
+            return TELNETD_STATUS_ERR_UNKNOWN;
+    }
+}
+
 TELNETD_STATUS Telnetd::initialize()
 {
-    OutputDebugStringA("telnetd: initialize called\n");
+    const auto server_init_result = m_tcp_server.initialize<TelnetSessionHandler>(TELNET_PORT);
+    if(server_init_result != TCPServer::EStatus::OK)
+        return tcp_server_status_to_telnetd(server_init_result);
 
-    
-
-    m_stop_event = CreateEventW(NULL, TRUE, FALSE, NULL);
-    if(!m_stop_event) {
-        terminate();
-        return TELNETD_STATUS_ERR_EVNT_CREATE;
-    }
-
-    m_accept_event = CreateEventW(NULL, TRUE, FALSE, NULL);
-    if(!m_accept_event) {
-        terminate();
-        return TELNETD_STATUS_ERR_EVNT_CREATE;
-    }
-
-    m_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(m_socket == INVALID_SOCKET) {
-        ERR("winsock socket create failed with: %d\n", WSAGetLastError());
-        terminate();
-        return TELNETD_STATUS_ERR_SOCK_CREATE;
-    }
-
-    sockaddr_in sin{};
-    sin.sin_family = AF_INET;
-    sin.sin_port = htons(23);
-    sin.sin_addr.s_addr = htonl(INADDR_ANY);
-    if(bind(m_socket, (const sockaddr*)&sin, sizeof(sin)) == SOCKET_ERROR) {
-        ERR("winsock socket bind failed with: %d\n", WSAGetLastError());
-        terminate();
-        return TELNETD_STATUS_ERR_SOCK_BIND;
-    }
-
-    if(listen(m_socket, SOMAXCONN) == SOCKET_ERROR) {
-        ERR("winsock socket listen failed with: %d\n", WSAGetLastError());
-        terminate();
-        return TELNETD_STATUS_ERR_SOCK_LISTEN;
-    }
-    
     DWORD thread_id{};
-    m_worker_thread =  CreateThread(NULL, 
-        0, 
-        Telnetd::worker_thread_func, 
-        this, 
-        0, 
+    m_worker_thread = CreateThread(
+        nullptr,
+        0,
+        worker_thread_func,
+        this,
+        0,
         &thread_id
     );
     if(!m_worker_thread) {
+        ERR("worker thread create failed with: %d\n", GetLastError());
         terminate();
-        return TELNETD_STATUS_ERR_THRD_CREATE;
+        return TELNETD_STATUS_ERR_THRD;
     }
 
     return TELNETD_STATUS_OK;
@@ -87,39 +78,45 @@ TELNETD_STATUS Telnetd::initialize()
 
 void Telnetd::terminate()
 {
-    OutputDebugStringA("telnetd: terminate called\n");
-
-    if(m_stop_event) SetEvent(m_stop_event);
+    m_tcp_server.request_stop();
     if(m_worker_thread) WaitForSingleObject(m_worker_thread, INFINITE);
+    m_tcp_server.terminate();
 
-    if(m_socket != INVALID_SOCKET) closesocket(m_socket);
-    m_socket = INVALID_SOCKET;
-
-    if(m_accept_event) CloseHandle(m_accept_event);
-    if(m_stop_event) CloseHandle(m_stop_event);
     if(m_worker_thread) CloseHandle(m_worker_thread);
     m_worker_thread = NULL;
-    m_stop_event = NULL;
-    m_accept_event = NULL;
 }
 
 TELNETD_STATUS Telnetd::serve()
 {
-    OutputDebugStringA("telnetd: serve called\n");
-
-    WSAEventSelect(m_socket, m_accept_event, FD_ACCEPT);
-
-    HANDLE events[] = {m_stop_event, m_accept_event};
-    const auto wait_result = WaitForMultipleObjects(2, events, FALSE, INFINITE);
-    if (wait_result == WAIT_OBJECT_0)
-        return TELNETD_STATUS_OK;
-    else if (wait_result != (WAIT_OBJECT_0 + 1))
-        return TELNETD_STATUS_ERR_UNKNOWN;
-
-    return TELNETD_STATUS_OK;
+    return tcp_server_status_to_telnetd(m_tcp_server.run());
 }
 
 DWORD WINAPI Telnetd::worker_thread_func(LPVOID self)
 {
     return ((Telnetd*)self)->serve();
+}
+
+// [IATODO] move this to a new file
+
+void TelnetSessionHandler::on_connect()
+{
+    OutputDebugStringA("telnetd: client connected!\n");
+}
+
+void TelnetSessionHandler::on_disconnect()
+{
+    OutputDebugStringA("telnetd: client disconnected.\n");
+}
+
+void TelnetSessionHandler::on_data(const uint8_t* data, size_t length)
+{
+    OutputDebugStringA("telnetd: got data:");
+    CHAR buf[256];
+    const auto buf_len = min((size_t)255, length);
+    RtlCopyMemory(buf, data, buf_len);
+    buf[buf_len] = '\0';
+    OutputDebugStringA(buf);
+    OutputDebugStringA("\n");
+    
+    send_data(data, length);
 }

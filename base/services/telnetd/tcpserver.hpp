@@ -27,7 +27,8 @@ class TCPServer;
 class TCPServerSessionHandler
 {
 public:
-    virtual ~TCPServerSessionHandler() = default;
+    TCPServerSessionHandler();
+    virtual ~TCPServerSessionHandler();
 
     virtual void on_connect() = 0;
     virtual void on_disconnect() = 0;
@@ -38,7 +39,7 @@ protected:
     TCPServer* m_server{};
     SOCKET m_socket{INVALID_SOCKET};
 
-    bool send_data(const void* data, size_t length) { return _internal_send_data(data, length, true) == 0; }
+    void send_data(const void* data, size_t length);
 
 private:
     std::vector<uint8_t> m_send_queue{};
@@ -46,9 +47,8 @@ private:
     CRITICAL_SECTION m_send_queue_cs{};
 
     void _internal_on_connect(TCPServer* server, SOCKET s);
-    void _internal_on_disconnect();
-
-    size_t _internal_send_data(const void* data, size_t length, bool allow_queue);
+    
+    bool _internal_flush_send_queue(bool lock = true);
 
     friend class TCPServer;
 };
