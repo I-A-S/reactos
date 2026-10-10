@@ -11,10 +11,14 @@
 
 class TelnetSessionHandler: public TCPServerSessionHandler
 {
+private:
+    void handle_data(const uint8_t* data, int length);
+    int handle_command(const uint8_t* cmd);
+
 public:
     void on_connect() override;
 
     void on_disconnect() override;
 
-    void on_data(const uint8_t* data, size_t length) override;
+    void on_data(const uint8_t* data, int length) override;
 };

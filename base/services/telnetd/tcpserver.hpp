@@ -33,13 +33,13 @@ public:
     virtual void on_connect() = 0;
     virtual void on_disconnect() = 0;
 
-    virtual void on_data(const uint8_t* data, size_t length) = 0;
+    virtual void on_data(const uint8_t* data, int length) = 0;
 
 protected:
     TCPServer* m_server{};
     SOCKET m_socket{INVALID_SOCKET};
 
-    void send_data(const void* data, size_t length);
+    void send_data(const void* data, int length);
 
 private:
     std::vector<uint8_t> m_send_queue{};

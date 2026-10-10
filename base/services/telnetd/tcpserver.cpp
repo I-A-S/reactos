@@ -31,7 +31,7 @@ void TCPServerSessionHandler::_internal_on_connect(TCPServer* server, SOCKET s)
     on_connect();
 }
 
-void TCPServerSessionHandler::send_data(const void* data, size_t length)
+void TCPServerSessionHandler::send_data(const void* data, int length)
 {
     EnterCriticalSection(&m_send_queue_cs);
 
