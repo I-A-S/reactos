@@ -9,30 +9,44 @@
 
 #include <cassert>
 
-enum class ECommand: uint8_t
+static constexpr uint8_t COMMAND_STRIDE_LUT[] =
 {
-    SE = 240,
-    NOP = 241,
-    DM = 242,
-    BRK = 243,
-    IP = 244,
-    AO = 245,
-    AYT = 246,
-    EC = 247,
-    EL = 248,
-    GA = 249,
-    SB = 250,
-    WILL = 251,
-    WONT = 252,
-    DO = 253,
-    DONT = 254,
-    IAC = 255,
-};
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 
-static constexpr uint8_t COMMAND_STRIDE_LUT[16] =
-{
-    2, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2, 3, 3, 3, 3, 2,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+
+    0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02,
+    0x02, 0x02, 0x00, 0x03, 0x03, 0x03, 0x03, 0x02,
 };
 
 void TelnetSessionHandler::on_connect()
@@ -55,32 +69,53 @@ void TelnetSessionHandler::on_disconnect()
 
 void TelnetSessionHandler::on_data(const uint8_t* data, int length)
 {
-    const uint8_t* data_cursor = data;
+    using cursor_type = const uint8_t*;
+    
+    const cursor_type end_cur = data + length;
+    cursor_type scan_cur{data}, text_cur{data};
 
-    while(length > 0) {
-        
-        if(*data == 0xFF) {
-
-            if(data_cursor != data) {
-                handle_data(data_cursor, data - data_cursor);
-                data_cursor = data;
+    while(scan_cur < end_cur)
+    {
+        if (m_command_buffer_cursor) {
+            if (m_command_buffer_cursor >= (uint8_t)sizeof(m_command_buffer)) {
+                m_command_buffer_cursor = 0;
+                scan_cur++;
+                continue;
             }
+            
+            m_command_buffer[m_command_buffer_cursor++] = *scan_cur;
+            const auto stride = COMMAND_STRIDE_LUT[m_command_buffer[1]];
 
-            const auto stride = handle_command(data);
-            data += stride;
-            length -= stride;
-            data_cursor += stride;
 
+            if (
+                !stride &&
+                (m_command_buffer[m_command_buffer_cursor - 2] == 0xFF) &&
+                (m_command_buffer[m_command_buffer_cursor - 1] == (uint8_t)ECommand::SE)
+            )
+                handle_subnegotiation(m_command_buffer[2], &m_command_buffer[3], m_command_buffer_cursor - 5);            
+            else if (stride == m_command_buffer_cursor)
+                handle_command((ECommand)m_command_buffer[1], &m_command_buffer[2]);
+
+            m_command_buffer_cursor = 0;
+            text_cur = scan_cur + 1;
+
+            scan_cur++;
+            continue;
+        } else {
+            if (*scan_cur == 0xFF) {
+                m_command_buffer[0] = 0xFF;
+                m_command_buffer_cursor = 1;
+
+                if (text_cur != scan_cur)
+                    handle_data(text_cur, scan_cur - text_cur);
+            }
+            scan_cur++;
             continue;
         }
-
-        data++;
-        length--;
     }
-    if(data_cursor != data)
-        handle_data(data_cursor, data - data_cursor);
+    if (!m_command_buffer_cursor && (text_cur != scan_cur))
+        handle_data(text_cur, scan_cur - text_cur);
 }
-
 
 void TelnetSessionHandler::handle_data(const uint8_t* data, int length)
 {
@@ -96,21 +131,14 @@ void TelnetSessionHandler::handle_data(const uint8_t* data, int length)
     send_data(data, length);
 }
 
-int TelnetSessionHandler::handle_command(const uint8_t* cmd)
+void TelnetSessionHandler::handle_command(ECommand cmd, const uint8_t* params)
 {
     OutputDebugStringA("telnetd: got command:");
-
-    assert(*cmd == 0xFF);    
-    cmd++;
     
-    int stride = COMMAND_STRIDE_LUT[*cmd - 240];
+}
 
-    if(*cmd == (uint8_t)ECommand::SB)
-    {
-        while(*cmd != (uint8_t)ECommand::SE) {
-            cmd++;
-        }
-    }
-    
-    return stride;
+void TelnetSessionHandler::handle_subnegotiation(uint8_t option, const uint8_t* params, uint8_t length)
+{
+    OutputDebugStringA("telnetd: started subnegotiation:");
+
 }
