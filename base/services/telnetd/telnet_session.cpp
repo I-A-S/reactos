@@ -53,12 +53,11 @@ void TelnetSessionHandler::on_connect()
 {
     OutputDebugStringA("telnetd: client connected!\n");
 
-    const uint8_t tmp[9] = {
-        0xFF, 0xFB, 0x01,
-        0xFF, 0xFB, 0x03,
-        0xFF, 0xFD, 0x03,
-    };
-    send_data(tmp, sizeof(tmp));
+    send_iac_will(0x01);
+    send_iac_will(0x03);
+    send_iac_do(0x03);
+
+    send_text((const uint8_t*)"Hello from ReactOS!", 20);
 }
 
 void TelnetSessionHandler::on_disconnect()
@@ -76,48 +75,11 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
 
     while(scan_cur < end_cur)
     {
-        if (m_command_buffer_cursor) {
-            if (m_command_buffer_cursor >= (uint8_t)sizeof(m_command_buffer)) {
-                m_command_buffer_cursor = 0;
-                scan_cur++;
-                continue;
-            }
-            
-            m_command_buffer[m_command_buffer_cursor++] = *scan_cur;
-            const auto stride = COMMAND_STRIDE_LUT[m_command_buffer[1]];
-
-
-            if (
-                !stride &&
-                (m_command_buffer[m_command_buffer_cursor - 2] == 0xFF) &&
-                (m_command_buffer[m_command_buffer_cursor - 1] == (uint8_t)ECommand::SE)
-            )
-                handle_subnegotiation(m_command_buffer[2], &m_command_buffer[3], m_command_buffer_cursor - 5);            
-            else if (stride == m_command_buffer_cursor)
-                handle_command((ECommand)m_command_buffer[1], &m_command_buffer[2]);
-
-            m_command_buffer_cursor = 0;
-            text_cur = scan_cur + 1;
-
-            scan_cur++;
-            continue;
-        } else {
-            if (*scan_cur == 0xFF) {
-                m_command_buffer[0] = 0xFF;
-                m_command_buffer_cursor = 1;
-
-                if (text_cur != scan_cur)
-                    handle_data(text_cur, scan_cur - text_cur);
-            }
-            scan_cur++;
-            continue;
-        }
+        
     }
-    if (!m_command_buffer_cursor && (text_cur != scan_cur))
-        handle_data(text_cur, scan_cur - text_cur);
 }
 
-void TelnetSessionHandler::handle_data(const uint8_t* data, int length)
+void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
 {
     OutputDebugStringA("telnetd: got data:");
 
@@ -141,4 +103,9 @@ void TelnetSessionHandler::handle_subnegotiation(uint8_t option, const uint8_t* 
 {
     OutputDebugStringA("telnetd: started subnegotiation:");
 
+}
+
+void TelnetSessionHandler::send_text(const uint8_t* data, int length)
+{
+    // escape 0xFF
 }

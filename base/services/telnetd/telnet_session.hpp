@@ -31,9 +31,16 @@ class TelnetSessionHandler: public TCPServerSessionHandler
         IAC = 255,
     };
 
-    void handle_data(const uint8_t* data, int length);
+    void handle_text(const uint8_t* data, int length);
     void handle_command(ECommand cmd, const uint8_t* params);
     void handle_subnegotiation(uint8_t option, const uint8_t* params, uint8_t length);
+
+    void send_text(const uint8_t* data, int length);
+
+    inline void send_iac_will(uint8_t param) { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::WILL, param, }; send_data(data, sizeof(data)); }
+    inline void send_iac_wont(uint8_t param) { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::WONT, param, }; send_data(data, sizeof(data)); }
+    inline void send_iac_do(uint8_t param)   { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::DO, param, }; send_data(data, sizeof(data)); }
+    inline void send_iac_dont(uint8_t param) { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::DONT, param, }; send_data(data, sizeof(data)); }
 
 public:
     void on_connect() override;
