@@ -43,6 +43,9 @@ class TelnetSessionHandler: public TCPServerSessionHandler
     inline void send_iac_dont(uint8_t param) { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::DONT, param, }; send_data(data, sizeof(data)); }
 
 public:
+    TelnetSessionHandler();
+    ~TelnetSessionHandler();
+
     void on_connect() override;
 
     void on_disconnect() override;
@@ -52,4 +55,8 @@ public:
 private:
     uint8_t m_command_buffer[128];
     uint8_t m_command_buffer_cursor{};
+
+    CRITICAL_SECTION m_out_text_cs{};
+    bool m_last_out_was_cr{};
+    std::vector<uint8_t> m_out_text_buffer{};
 };

@@ -9,6 +9,8 @@
 
 #include <cassert>
 
+using cursor_type = const uint8_t*;
+
 static constexpr uint8_t COMMAND_STRIDE_LUT[] =
 {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -49,6 +51,16 @@ static constexpr uint8_t COMMAND_STRIDE_LUT[] =
     0x02, 0x02, 0x00, 0x03, 0x03, 0x03, 0x03, 0x02,
 };
 
+TelnetSessionHandler::TelnetSessionHandler()
+{
+    InitializeCriticalSection(&m_out_text_cs);
+}
+
+TelnetSessionHandler::~TelnetSessionHandler()
+{
+    DeleteCriticalSection(&m_out_text_cs);
+}
+
 void TelnetSessionHandler::on_connect()
 {
     OutputDebugStringA("telnetd: client connected!\n");
@@ -57,7 +69,7 @@ void TelnetSessionHandler::on_connect()
     send_iac_will(0x03);
     send_iac_do(0x03);
 
-    send_text((const uint8_t*)"Hello from ReactOS!", 20);
+    send_text((const uint8_t*)"Hello from ReactOS!\n", 20);
 }
 
 void TelnetSessionHandler::on_disconnect()
@@ -68,8 +80,6 @@ void TelnetSessionHandler::on_disconnect()
 
 void TelnetSessionHandler::on_data(const uint8_t* data, int length)
 {
-    using cursor_type = const uint8_t*;
-    
     const cursor_type end_cur = data + length;
     cursor_type scan_cur{data}, text_cur{data};
 
@@ -107,5 +117,49 @@ void TelnetSessionHandler::handle_subnegotiation(uint8_t option, const uint8_t* 
 
 void TelnetSessionHandler::send_text(const uint8_t* data, int length)
 {
-    // escape 0xFF
+    if (length <= 0)
+        return;
+
+    const cursor_type end_cur = data + length;
+    cursor_type write_cur{data}, text_cur{data};
+
+    EnterCriticalSection(&m_out_text_cs);
+
+    // 1.25 * length to account for potential escaped IACs, CRs, LFs
+    m_out_text_buffer.reserve(length + (length >> 2)); 
+    m_out_text_buffer.clear();
+
+    while(write_cur < end_cur)
+    {        
+        const auto c = *write_cur;
+
+        if (m_last_out_was_cr && c != '\n' && c != '\0') {
+            m_out_text_buffer.insert(m_out_text_buffer.end(), text_cur, write_cur);
+            m_out_text_buffer.push_back(0);
+            text_cur = write_cur;
+            m_last_out_was_cr = false;
+        }
+
+        if (c == 0xFF) {
+            m_out_text_buffer.insert(m_out_text_buffer.end(), text_cur, write_cur);
+            m_out_text_buffer.push_back(0xFF);
+            m_out_text_buffer.push_back(0xFF);
+            text_cur = write_cur + 1;
+        } else if (c == '\n') {
+            m_out_text_buffer.insert(m_out_text_buffer.end(), text_cur, write_cur);
+            if(!m_last_out_was_cr)
+                m_out_text_buffer.push_back('\r');
+            m_out_text_buffer.push_back('\n');
+            m_last_out_was_cr = false;
+            text_cur = write_cur + 1;
+        } else
+            m_last_out_was_cr = (c == '\r');
+
+        write_cur++;
+    }
+    m_out_text_buffer.insert(m_out_text_buffer.end(), text_cur, write_cur);
+
+    send_data(m_out_text_buffer.data(), (int)m_out_text_buffer.size());
+
+    LeaveCriticalSection(&m_out_text_cs);
 }

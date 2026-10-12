@@ -33,6 +33,9 @@ void TCPServerSessionHandler::_internal_on_connect(TCPServer* server, SOCKET s)
 
 void TCPServerSessionHandler::send_data(const void* data, int length)
 {
+    if(length <= 0)
+        return;
+
     EnterCriticalSection(&m_send_queue_cs);
 
     if(m_send_queue_cursor + length > m_send_queue.size())
