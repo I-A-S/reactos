@@ -120,17 +120,14 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
 
                     m_sb_buffer.push_back(0xFF);
                     m_parser_state = EParserState::SUBNEGO_PAYLOAD;
-                } else {
-                    if (c == ECommand::SE) {
-                        assert(m_sb_buffer.size() <= MAX_SUBNEGO_PAYLOAD_LENGTH);
-                        handle_subnegotiation(m_parser_state_data, m_sb_buffer.data(), (uint8_t)m_sb_buffer.size());
-                    }
-                    
-                    // if c is not IAC or SE by here then it is malformed subnego payload 
-                    // so we just drop it and move on
-                    
+                } else if (c == ECommand::SE) {
+                    assert(m_sb_buffer.size() <= MAX_SUBNEGO_PAYLOAD_LENGTH);
+                    handle_subnegotiation(m_parser_state_data, m_sb_buffer.data(), (uint8_t)m_sb_buffer.size());
                     text_cur = scan_cur;
                     m_parser_state = EParserState::TEXT;
+                } else {
+                    scan_cur--;
+                    m_parser_state = EParserState::AFTER_IAC;
                 }
             }
             break;
@@ -141,11 +138,19 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
             break;
 
             case EParserState::MALFORMED_SUBNEGO_AFTER_IAC:
-                if (*scan_cur++ == (uint8_t)ECommand::SE) {
+            {
+                const auto c = (ECommand)*scan_cur++;
+
+                if (c == ECommand::SE) {
                     text_cur = scan_cur;
                     m_parser_state = EParserState::TEXT;
-                } else
+                } else if (c == ECommand::IAC)
                     m_parser_state = EParserState::MALFORMED_SUBNEGO;
+                else {
+                    scan_cur--;
+                    m_parser_state = EParserState::AFTER_IAC;
+                }
+            }
             break;
         }
     }
