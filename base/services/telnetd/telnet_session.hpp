@@ -13,6 +13,10 @@ class TelnetSessionHandler: public TCPServerSessionHandler
 {
     enum class ECommand: uint8_t
     {
+        xEOF = 236,
+        SUSP = 237,
+        ABORT = 238,
+        EOR = 239,
         SE = 240,
         NOP = 241,
         DM = 242,
@@ -31,6 +35,17 @@ class TelnetSessionHandler: public TCPServerSessionHandler
         IAC = 255,
     };
 
+    enum class EParserState: uint8_t
+    {
+        TEXT,
+        AFTER_IAC,
+        AFTER_VERB,
+        AFTER_SB,
+        SUBNEGO_PAYLOAD,
+        SUBNEGO_AFTER_IAC,
+    };
+
+private:
     void handle_text(const uint8_t* data, int length);
     void handle_command(ECommand cmd, const uint8_t* params);
     void handle_subnegotiation(uint8_t option, const uint8_t* params, uint8_t length);
@@ -55,6 +70,9 @@ public:
 private:
     uint8_t m_command_buffer[128];
     uint8_t m_command_buffer_cursor{};
+
+    uint8_t m_parser_state_data{};
+    EParserState m_parser_state{EParserState::TEXT};
 
     CRITICAL_SECTION m_out_text_cs{};
     bool m_last_out_was_cr{};
