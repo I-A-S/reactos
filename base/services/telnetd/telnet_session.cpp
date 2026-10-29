@@ -8,7 +8,6 @@
 #include "telnet_session.hpp"
 
 #include <cassert>
-#include <cstdint>
 
 using cursor_type = const uint8_t*;
 
