@@ -8,6 +8,7 @@
 #include "telnet_session.hpp"
 
 #include <cassert>
+#include <cstdint>
 
 using cursor_type = const uint8_t*;
 
@@ -50,7 +51,7 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
         {
             case EParserState::TEXT:
                 if (*scan_cur++ == (uint8_t)ECommand::IAC) {
-                    handle_text(text_cur, scan_cur - text_cur);
+                    handle_text(text_cur, scan_cur - text_cur - 1);
                     text_cur = scan_cur;
                     m_parser_state = EParserState::AFTER_IAC;
                 }
@@ -98,9 +99,8 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
                     m_parser_state = EParserState::SUBNEGO_AFTER_IAC;
                 } else {
                     if (m_sb_buffer.size() >= MAX_SUBNEGO_PAYLOAD_LENGTH) {
-                        // too long of a payload, almost certainly malformed data. 
-                        text_cur = scan_cur;
-                        m_parser_state = EParserState::TEXT;
+                        m_parser_state = EParserState::MALFORMED_SUBNEGO;
+                        break;
                     }
 
                     m_sb_buffer.push_back(c);
@@ -114,9 +114,8 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
 
                 if (c == ECommand::IAC) {
                     if (m_sb_buffer.size() >= MAX_SUBNEGO_PAYLOAD_LENGTH) {
-                        // too long of a payload, almost certainly malformed data. 
-                        text_cur = scan_cur;
-                        m_parser_state = EParserState::TEXT;
+                        m_parser_state = EParserState::MALFORMED_SUBNEGO;
+                        break;
                     }
 
                     m_sb_buffer.push_back(0xFF);
@@ -134,6 +133,19 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
                     m_parser_state = EParserState::TEXT;
                 }
             }
+            break;
+
+            case EParserState::MALFORMED_SUBNEGO:
+                if (*scan_cur++ == (uint8_t)ECommand::IAC)
+                    m_parser_state = EParserState::MALFORMED_SUBNEGO_AFTER_IAC;
+            break;
+
+            case EParserState::MALFORMED_SUBNEGO_AFTER_IAC:
+                if (*scan_cur++ == (uint8_t)ECommand::SE) {
+                    text_cur = scan_cur;
+                    m_parser_state = EParserState::TEXT;
+                } else
+                    m_parser_state = EParserState::MALFORMED_SUBNEGO;
             break;
         }
     }
@@ -156,7 +168,7 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
     OutputDebugStringA(buf);
     OutputDebugStringA("\n");
     
-    send_data(data, length);
+    send_text(data, length);
 }
 
 void TelnetSessionHandler::handle_command(ECommand cmd, const uint8_t* params)

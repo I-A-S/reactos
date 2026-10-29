@@ -45,6 +45,8 @@ class TelnetSessionHandler: public TCPServerSessionHandler
         AFTER_SB,
         SUBNEGO_PAYLOAD,
         SUBNEGO_AFTER_IAC,
+        MALFORMED_SUBNEGO,
+        MALFORMED_SUBNEGO_AFTER_IAC,
     };
 
 private:
@@ -70,9 +72,6 @@ public:
     void on_data(const uint8_t* data, int length) override;
 
 private:
-    uint8_t m_command_buffer[128];
-    uint8_t m_command_buffer_cursor{};
-
     uint8_t m_parser_state_data{};
     std::vector<uint8_t> m_sb_buffer{};
     EParserState m_parser_state{EParserState::TEXT};
