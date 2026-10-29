@@ -25,8 +25,6 @@ TelnetSessionHandler::~TelnetSessionHandler()
 
 void TelnetSessionHandler::on_connect()
 {
-    OutputDebugStringA("telnetd: client connected!\n");
-
     send_iac_will(0x01);
     send_iac_will(0x03);
     send_iac_do(0x03);
@@ -36,8 +34,6 @@ void TelnetSessionHandler::on_connect()
 
 void TelnetSessionHandler::on_disconnect()
 {
-    OutputDebugStringA("telnetd: client disconnected.\n");
-
 }
 
 void TelnetSessionHandler::on_data(const uint8_t* data, int length)
@@ -164,27 +160,16 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
     if (length <= 0)
         return;
 
-    OutputDebugStringA("telnetd: got data:");
-
-    CHAR buf[256];
-    const auto buf_len = std::min<int>(255, length);
-    RtlCopyMemory(buf, data, buf_len);
-    buf[buf_len] = '\0';
-    OutputDebugStringA(buf);
-    OutputDebugStringA("\n");
-    
     send_text(data, length);
 }
 
 void TelnetSessionHandler::handle_command(ECommand cmd, const uint8_t* params)
 {
-    OutputDebugStringA("telnetd: got command:");
     
 }
 
 void TelnetSessionHandler::handle_subnegotiation(uint8_t option, const uint8_t* params, uint8_t length)
 {
-    OutputDebugStringA("telnetd: started subnegotiation:");
 
 }
 
