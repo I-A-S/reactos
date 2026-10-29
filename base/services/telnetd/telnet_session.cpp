@@ -6,12 +6,14 @@
  */
 
 #include "telnet_session.hpp"
-#include <cstdint>
+
+#include <cassert>
 
 using cursor_type = const uint8_t*;
 
 TelnetSessionHandler::TelnetSessionHandler()
 {
+    m_sb_buffer.reserve(MAX_SUBNEGO_PAYLOAD_LENGTH);
     InitializeCriticalSection(&m_out_text_cs);
 }
 
@@ -42,31 +44,22 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
     const cursor_type end_cur = data + length;
     cursor_type scan_cur{data}, text_cur{data};
 
-    const auto flush_text = [&]()
-    {
-        handle_text(text_cur, scan_cur - text_cur);
-        text_cur = scan_cur + 1;
-    };
-
     while(scan_cur < end_cur)
     {
         switch(m_parser_state)
         {
             case EParserState::TEXT:
-                if (*scan_cur == (uint8_t)ECommand::IAC) {
-                    flush_text();
+                if (*scan_cur++ == (uint8_t)ECommand::IAC) {
+                    handle_text(text_cur, scan_cur - text_cur);
+                    text_cur = scan_cur;
                     m_parser_state = EParserState::AFTER_IAC;
                 }
-                scan_cur++;
                 break;
 
             case EParserState::AFTER_IAC:
             {
                 const auto c = (ECommand)*scan_cur++;
-                if (c == ECommand::IAC) {
-                    handle_text((const uint8_t*)&c, 1);
-                    m_parser_state = EParserState::TEXT;
-                } else if(c == ECommand::SB) {
+                if(c == ECommand::SB) {
                     m_parser_state = EParserState::AFTER_SB;
                 } else if(
                     (c >= ECommand::WILL) &&
@@ -75,31 +68,85 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
                     m_parser_state_data = (uint8_t)c;
                     m_parser_state = EParserState::AFTER_VERB;
                 } else {
-                    handle_command(c, nullptr);
+                    if (c == ECommand::IAC)
+                        handle_text((const uint8_t*)&c, 1);
+                    else
+                        handle_command(c, nullptr);
+                    text_cur = scan_cur;
                     m_parser_state = EParserState::TEXT;
                 }
-                scan_cur++;
             }
             break;
 
             case EParserState::AFTER_VERB:
-                
+                handle_command((ECommand)m_parser_state_data, scan_cur++);
+                text_cur = scan_cur;
+                m_parser_state = EParserState::TEXT;
                 break;
 
             case EParserState::AFTER_SB:
+                m_sb_buffer.clear();
+                m_parser_state_data = *scan_cur++;
+                m_parser_state = EParserState::SUBNEGO_PAYLOAD;
                 break;
 
             case EParserState::SUBNEGO_PAYLOAD:
-                break;
+            {
+                const auto c = *scan_cur++;
+
+                if (c == (uint8_t)ECommand::IAC) {
+                    m_parser_state = EParserState::SUBNEGO_AFTER_IAC;
+                } else {
+                    if (m_sb_buffer.size() >= MAX_SUBNEGO_PAYLOAD_LENGTH) {
+                        // too long of a payload, almost certainly malformed data. 
+                        text_cur = scan_cur;
+                        m_parser_state = EParserState::TEXT;
+                    }
+
+                    m_sb_buffer.push_back(c);
+                }
+            }
+            break;
 
             case EParserState::SUBNEGO_AFTER_IAC:
-                break;
+            {
+                const auto c = (ECommand)*scan_cur++;
+
+                if (c == ECommand::IAC) {
+                    if (m_sb_buffer.size() >= MAX_SUBNEGO_PAYLOAD_LENGTH) {
+                        // too long of a payload, almost certainly malformed data. 
+                        text_cur = scan_cur;
+                        m_parser_state = EParserState::TEXT;
+                    }
+
+                    m_sb_buffer.push_back(0xFF);
+                    m_parser_state = EParserState::SUBNEGO_PAYLOAD;
+                } else {
+                    if (c == ECommand::SE) {
+                        assert(m_sb_buffer.size() <= MAX_SUBNEGO_PAYLOAD_LENGTH);
+                        handle_subnegotiation(m_parser_state_data, m_sb_buffer.data(), (uint8_t)m_sb_buffer.size());
+                    }
+                    
+                    // if c is not IAC or SE by here then it is malformed subnego payload 
+                    // so we just drop it and move on
+                    
+                    text_cur = scan_cur;
+                    m_parser_state = EParserState::TEXT;
+                }
+            }
+            break;
         }
     }
+
+    if (m_parser_state == EParserState::TEXT)
+        handle_text(text_cur, scan_cur - text_cur);
 }
 
 void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
 {
+    if (length <= 0)
+        return;
+
     OutputDebugStringA("telnetd: got data:");
 
     CHAR buf[256];

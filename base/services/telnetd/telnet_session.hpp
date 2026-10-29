@@ -11,6 +11,8 @@
 
 class TelnetSessionHandler: public TCPServerSessionHandler
 {
+    static constexpr size_t MAX_SUBNEGO_PAYLOAD_LENGTH = 255;
+
     enum class ECommand: uint8_t
     {
         xEOF = 236,
@@ -72,6 +74,7 @@ private:
     uint8_t m_command_buffer_cursor{};
 
     uint8_t m_parser_state_data{};
+    std::vector<uint8_t> m_sb_buffer{};
     EParserState m_parser_state{EParserState::TEXT};
 
     CRITICAL_SECTION m_out_text_cs{};
