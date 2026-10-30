@@ -48,6 +48,16 @@ void TCPServerSessionHandler::send_data(const void* data, int length)
     LeaveCriticalSection(&m_send_queue_cs);
 }
 
+void TCPServerSessionHandler::clear_pending_send_queue()
+{
+    EnterCriticalSection(&m_send_queue_cs);
+
+    m_send_queue.clear();
+    m_send_queue_cursor = 0;
+
+    LeaveCriticalSection(&m_send_queue_cs);
+}
+
 bool TCPServerSessionHandler::_internal_flush_send_queue(bool lock )
 {
     if (lock) EnterCriticalSection(&m_send_queue_cs);

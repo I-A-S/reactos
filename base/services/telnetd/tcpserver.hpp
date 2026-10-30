@@ -41,6 +41,8 @@ protected:
 
     void send_data(const void* data, int length);
 
+    void clear_pending_send_queue();
+
 private:
     std::vector<uint8_t> m_send_queue{};
     size_t m_send_queue_cursor{};
