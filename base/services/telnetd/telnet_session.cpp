@@ -27,8 +27,6 @@ void TelnetSessionHandler::on_connect()
     send_iac_will(0x01);
     send_iac_will(0x03);
     send_iac_do(0x03);
-
-    send_text((const uint8_t*)"Hello from ReactOS!\n", 20);
 }
 
 void TelnetSessionHandler::on_disconnect()
@@ -67,7 +65,7 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
                     if (c == ECommand::IAC)
                         handle_text((const uint8_t*)&c, 1);
                     else
-                        handle_command(c, nullptr);
+                        handle_command(c);
                     text_cur = scan_cur;
                     m_parser_state = EParserState::TEXT;
                 }
@@ -75,7 +73,7 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
             break;
 
             case EParserState::AFTER_VERB:
-                handle_command((ECommand)m_parser_state_data, scan_cur++);
+                handle_option_command((ECommand)m_parser_state_data, *++scan_cur);
                 text_cur = scan_cur;
                 m_parser_state = EParserState::TEXT;
                 break;
@@ -162,9 +160,62 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
     send_text(data, length);
 }
 
-void TelnetSessionHandler::handle_command(ECommand cmd, const uint8_t* params)
+void TelnetSessionHandler::handle_command(ECommand cmd)
 {
-    
+    switch (cmd)
+    {
+        case ECommand::AYT:
+            send_text((const uint8_t*)"\r\n[ReactOS telnetd: yes]\r\n", 26);
+            break;
+
+        case ECommand::AO:
+        {
+            uint8_t data[2] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::DM };
+            send_data(data, sizeof(data));
+        }
+        break;
+
+        case ECommand::IP:
+            break;
+        case ECommand::BRK:
+            break;
+
+        case ECommand::EC:
+            break;
+        case ECommand::EL:
+            break;
+
+        case ECommand::WILL:
+        case ECommand::WONT:
+        case ECommand::DO:
+        case ECommand::DONT:
+            assert(false);
+            break;
+
+        default:
+            break;
+    }
+}
+
+void TelnetSessionHandler::handle_option_command(ECommand verb, uint8_t option)
+{
+    switch (verb) {
+        case ECommand::WILL:
+            break;
+
+        case ECommand::WONT:
+            break;
+
+        case ECommand::DO:
+            break;
+
+        case ECommand::DONT:
+            break;
+
+        default:
+            assert(false);
+            break;
+    }
 }
 
 void TelnetSessionHandler::handle_subnegotiation(uint8_t option, const uint8_t* params, uint8_t length)

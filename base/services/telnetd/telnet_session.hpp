@@ -51,7 +51,8 @@ class TelnetSessionHandler: public TCPServerSessionHandler
 
 private:
     void handle_text(const uint8_t* data, int length);
-    void handle_command(ECommand cmd, const uint8_t* params);
+    void handle_command(ECommand cmd);
+    void handle_option_command(ECommand verb, uint8_t option);
     void handle_subnegotiation(uint8_t option, const uint8_t* params, uint8_t length);
 
     void send_text(const uint8_t* data, int length);
