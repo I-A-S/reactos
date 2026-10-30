@@ -24,9 +24,9 @@ TelnetSessionHandler::~TelnetSessionHandler()
 
 void TelnetSessionHandler::on_connect()
 {
-    send_iac_will(0x01);
-    send_iac_will(0x03);
-    send_iac_do(0x03);
+    send_iac_will(EOption::ECHO);
+    send_iac_will(EOption::SGA);
+    send_iac_do(EOption::SGA);
 }
 
 void TelnetSessionHandler::on_disconnect()
@@ -73,7 +73,7 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
             break;
 
             case EParserState::AFTER_VERB:
-                handle_option_command((ECommand)m_parser_state_data, *++scan_cur);
+                handle_option_command((ECommand)m_parser_state_data, (EOption)*++scan_cur);
                 text_cur = scan_cur;
                 m_parser_state = EParserState::TEXT;
                 break;
@@ -165,8 +165,11 @@ void TelnetSessionHandler::handle_command(ECommand cmd)
     switch (cmd)
     {
         case ECommand::AYT:
-            send_text((const uint8_t*)"\r\n[ReactOS telnetd: yes]\r\n", 26);
-            break;
+        {
+            static const char msg[] = "\r\n[ReactOS telnetd: yes]\r\n";
+            send_text((const uint8_t*)msg, sizeof(msg) - 1);
+        }
+        break;
 
         case ECommand::AO:
         {
@@ -197,18 +200,33 @@ void TelnetSessionHandler::handle_command(ECommand cmd)
     }
 }
 
-void TelnetSessionHandler::handle_option_command(ECommand verb, uint8_t option)
+void TelnetSessionHandler::handle_option_command(ECommand verb, EOption option)
 {
+    bool refuse = true;
+
+    switch(option)
+    {
+        case EOption::ECHO:
+        case EOption::SGA:
+            refuse = false;
+            break;
+
+        default:
+            refuse = true;
+            break;
+    }
+
     switch (verb) {
         case ECommand::WILL:
+            refuse ? send_iac_dont(option) : send_iac_do(option);
+            break;
+
+        case ECommand::DO:
+            refuse ? send_iac_wont(option) : send_iac_will(option);
             break;
 
         case ECommand::WONT:
             break;
-
-        case ECommand::DO:
-            break;
-
         case ECommand::DONT:
             break;
 

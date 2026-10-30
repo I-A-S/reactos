@@ -8,6 +8,7 @@
 #pragma once
 
 #include "tcpserver.hpp"
+#include <cstdint>
 
 class TelnetSessionHandler: public TCPServerSessionHandler
 {
@@ -37,6 +38,18 @@ class TelnetSessionHandler: public TCPServerSessionHandler
         IAC = 255,
     };
 
+    enum class EOption: uint8_t
+    {
+        BINARY = 0,
+        ECHO = 1,
+        SGA = 3,
+        STATUS = 5,
+        TM = 6,
+
+        TTYPE = 24,
+        NAWS = 31,
+    };
+
     enum class EParserState: uint8_t
     {
         TEXT,
@@ -52,15 +65,15 @@ class TelnetSessionHandler: public TCPServerSessionHandler
 private:
     void handle_text(const uint8_t* data, int length);
     void handle_command(ECommand cmd);
-    void handle_option_command(ECommand verb, uint8_t option);
+    void handle_option_command(ECommand verb, EOption option);
     void handle_subnegotiation(uint8_t option, const uint8_t* params, uint8_t length);
 
     void send_text(const uint8_t* data, int length);
 
-    inline void send_iac_will(uint8_t param) { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::WILL, param, }; send_data(data, sizeof(data)); }
-    inline void send_iac_wont(uint8_t param) { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::WONT, param, }; send_data(data, sizeof(data)); }
-    inline void send_iac_do(uint8_t param)   { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::DO, param, }; send_data(data, sizeof(data)); }
-    inline void send_iac_dont(uint8_t param) { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::DONT, param, }; send_data(data, sizeof(data)); }
+    inline void send_iac_will(EOption option) { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::WILL, (uint8_t)option, }; send_data(data, sizeof(data)); }
+    inline void send_iac_wont(EOption option) { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::WONT, (uint8_t)option, }; send_data(data, sizeof(data)); }
+    inline void send_iac_do(EOption option)   { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::DO, (uint8_t)option, }; send_data(data, sizeof(data)); }
+    inline void send_iac_dont(EOption option) { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::DONT, (uint8_t)option, }; send_data(data, sizeof(data)); }
 
 public:
     TelnetSessionHandler();
