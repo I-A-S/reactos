@@ -24,9 +24,13 @@ TelnetSessionHandler::~TelnetSessionHandler()
 
 void TelnetSessionHandler::on_connect()
 {
-    send_iac_will(EOption::ECHO);
-    send_iac_will(EOption::SGA);
-    send_iac_do(EOption::SGA);
+    m_will_echo = true;
+    send_option_command(ECommand::WILL, EOption::ECHO);
+    send_option_command(ECommand::WILL, EOption::SGA);
+    send_option_command(ECommand::DO, EOption::SGA);
+
+    // placeholder login prompt
+    send_text((const uint8_t*)"ReactOS Telnet\nserver login: ", 29);
 }
 
 void TelnetSessionHandler::on_disconnect()
@@ -202,36 +206,35 @@ void TelnetSessionHandler::handle_command(ECommand cmd)
 
 void TelnetSessionHandler::handle_option_command(ECommand verb, EOption option)
 {
-    bool refuse = true;
-
-    switch(option)
-    {
+    switch (option) {
         case EOption::ECHO:
+        {
+            if (!m_will_echo && verb == ECommand::DO) {
+                m_will_echo = true;
+                send_option_command(ECommand::WILL, EOption::ECHO);
+            } else if (m_will_echo && verb == ECommand::DONT) {
+                m_will_echo = false;
+                send_option_command(ECommand::WONT, EOption::ECHO);
+            }
+        }
+        break;
+
         case EOption::SGA:
-            refuse = false;
-            break;
+        {
+            if ((verb == ECommand::DONT) || (verb == ECommand::WONT)) {
+                // Any reasonably modern telnet client supports full duplex.
+                // If a client doesn't support full duplex, we just drop them. 
+                disconnect();
+            }
+        }
+        break;
+
+        case EOption::BINARY:
+        {
+        }
+        break;
 
         default:
-            refuse = true;
-            break;
-    }
-
-    switch (verb) {
-        case ECommand::WILL:
-            refuse ? send_iac_dont(option) : send_iac_do(option);
-            break;
-
-        case ECommand::DO:
-            refuse ? send_iac_wont(option) : send_iac_will(option);
-            break;
-
-        case ECommand::WONT:
-            break;
-        case ECommand::DONT:
-            break;
-
-        default:
-            assert(false);
             break;
     }
 }

@@ -8,7 +8,6 @@
 #pragma once
 
 #include "tcpserver.hpp"
-#include <cstdint>
 
 class TelnetSessionHandler: public TCPServerSessionHandler
 {
@@ -43,7 +42,6 @@ class TelnetSessionHandler: public TCPServerSessionHandler
         BINARY = 0,
         ECHO = 1,
         SGA = 3,
-        STATUS = 5,
         TM = 6,
 
         TTYPE = 24,
@@ -70,10 +68,7 @@ private:
 
     void send_text(const uint8_t* data, int length);
 
-    inline void send_iac_will(EOption option) { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::WILL, (uint8_t)option, }; send_data(data, sizeof(data)); }
-    inline void send_iac_wont(EOption option) { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::WONT, (uint8_t)option, }; send_data(data, sizeof(data)); }
-    inline void send_iac_do(EOption option)   { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::DO, (uint8_t)option, }; send_data(data, sizeof(data)); }
-    inline void send_iac_dont(EOption option) { uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)ECommand::DONT, (uint8_t)option, }; send_data(data, sizeof(data)); }
+    inline void send_option_command(ECommand verb, EOption option);
 
 public:
     TelnetSessionHandler();
@@ -93,4 +88,14 @@ private:
     CRITICAL_SECTION m_out_text_cs{};
     bool m_last_out_was_cr{};
     std::vector<uint8_t> m_out_text_buffer{};
+
+    bool m_will_echo{true};
+    bool m_binary_incoming{false};
+    bool m_binary_outgoing{false};
 };
+
+void TelnetSessionHandler::send_option_command(ECommand verb, EOption option)
+{
+    uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)verb, (uint8_t)option, };
+    send_data(data, sizeof(data));
+}
