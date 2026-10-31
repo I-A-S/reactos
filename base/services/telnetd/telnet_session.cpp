@@ -77,7 +77,7 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
             break;
 
             case EParserState::AFTER_VERB:
-                handle_option_command((ECommand)m_parser_state_data, (EOption)*++scan_cur);
+                handle_option_command((ECommand)m_parser_state_data, (EOption)*scan_cur++);
                 text_cur = scan_cur;
                 m_parser_state = EParserState::TEXT;
                 break;
