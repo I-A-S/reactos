@@ -23,12 +23,18 @@ TCPServerSessionHandler::~TCPServerSessionHandler()
     DeleteCriticalSection(&m_send_queue_cs);
 }
 
-void TCPServerSessionHandler::_internal_on_connect(TCPServer* server, SOCKET s)
+void TCPServerSessionHandler::_internal_on_connect(TCPServer* server, SOCKET s, WSAEVENT e)
 {
     m_server = server;
     m_socket = s;
+    m_event = e;
 
     on_connect();
+}
+
+void TCPServerSessionHandler::disconnect()
+{
+    m_server->disconnect_session(this);
 }
 
 void TCPServerSessionHandler::send_data(const void* data, int length)
@@ -58,9 +64,15 @@ void TCPServerSessionHandler::clear_pending_send_queue()
     LeaveCriticalSection(&m_send_queue_cs);
 }
 
-bool TCPServerSessionHandler::_internal_flush_send_queue(bool lock )
+bool TCPServerSessionHandler::_internal_flush_send_queue(bool lock)
 {
     if (lock) EnterCriticalSection(&m_send_queue_cs);
+
+    if (m_socket == INVALID_SOCKET) {
+        m_send_queue_cursor = 0;
+        if (lock) LeaveCriticalSection(&m_send_queue_cs);
+        return false;
+    }
 
     const char* buffer = (const char*)m_send_queue.data();
 
@@ -163,6 +175,9 @@ TCPServer::EStatus TCPServer::initialize(uint16_t port, const char* interface_ad
 
 void TCPServer::terminate()
 {
+    while (m_session_data.current_index > 2)
+        remove_session(m_session_data.current_index - 1, false);
+
     for(DWORD i = 0; i < m_session_data.current_index; i++)
     {
         if(m_session_data.sockets[i] != INVALID_SOCKET)
@@ -189,6 +204,15 @@ void TCPServer::terminate()
 BOOL TCPServer::request_stop()
 {
     return WSASetEvent(m_session_data.events[0]);
+}
+
+void TCPServer::disconnect_session(TCPServerSessionHandler* handler)
+{
+    if (!handler)
+        return;
+
+    if (!InterlockedExchange(&handler->m_disconnect_requested, 1))
+        WSASetEvent(handler->m_event);
 }
 
 TCPServer::EStatus TCPServer::run()
@@ -255,7 +279,7 @@ TCPServer::EStatus TCPServer::run()
 
                     const auto handler = m_handler_factory();
 
-                    handler->_internal_on_connect(this, client_socket);
+                    handler->_internal_on_connect(this, client_socket, client_event);
 
                     m_session_data.events[m_session_data.current_index] = client_event;
                     m_session_data.sockets[m_session_data.current_index] = client_socket;
@@ -289,35 +313,25 @@ TCPServer::EStatus TCPServer::run()
                 }
             }
 
-            if (net_events.lNetworkEvents & FD_CLOSE)
-            {
-                if (net_events.iErrorCode[FD_CLOSE_BIT] != 0) {
-                    ERR("network close event failed with: %d\n", net_events.iErrorCode[FD_CLOSE_BIT]);
+            const auto closed_by_peer = (net_events.lNetworkEvents & FD_CLOSE) != 0;       
+
+            if (closed_by_peer || m_session_data.handlers[i]->m_disconnect_requested) {
+
+                if (closed_by_peer) {
+                    if (net_events.iErrorCode[FD_CLOSE_BIT] != 0) {
+                        ERR("network close event failed with: %d\n", net_events.iErrorCode[FD_CLOSE_BIT]);
+                    }
+
+                    while (true) {
+                        const auto read_count = recv(m_session_data.sockets[i], read_buffer, 
+                                sizeof(read_buffer) - 1, 0);
+                        if(read_count <= 0) break;
+                        read_buffer[read_count] = '\0';
+                        m_session_data.handlers[i]->on_data((uint8_t*)read_buffer, read_count);
+                    }
                 }
 
-                while (true) {
-                    const auto read_count = recv(m_session_data.sockets[i], read_buffer, 
-                            sizeof(read_buffer) - 1, 0);
-                    if(read_count <= 0) break;
-                    read_buffer[read_count] = '\0';
-                    m_session_data.handlers[i]->on_data((uint8_t*)read_buffer, read_count);
-                }
-
-                closesocket(m_session_data.sockets[i]);
-                WSACloseEvent(m_session_data.events[i]);
-                m_session_data.handlers[i]->on_disconnect();
-                delete m_session_data.handlers[i];
-
-                for(DWORD j = i; j < m_session_data.current_index - 1; j++) {
-                    m_session_data.sockets[j] = m_session_data.sockets[j + 1];
-                    m_session_data.events[j] = m_session_data.events[j + 1];
-                    m_session_data.handlers[j] = m_session_data.handlers[j + 1];
-                }
-                m_session_data.sockets[m_session_data.current_index - 1] = INVALID_SOCKET;
-                m_session_data.events[m_session_data.current_index - 1] = WSA_INVALID_EVENT;
-                m_session_data.handlers[m_session_data.current_index - 1] = nullptr;
-
-                m_session_data.current_index--;
+                remove_session(i, closed_by_peer);
                 i--;
 
                 continue;
@@ -328,3 +342,34 @@ TCPServer::EStatus TCPServer::run()
     return EStatus::OK;
 }
 
+void TCPServer::remove_session(DWORD i, bool closed_by_peer)
+{
+    const auto handler = m_session_data.handlers[i];
+
+    EnterCriticalSection(&handler->m_send_queue_cs);
+
+    if (!closed_by_peer)
+        handler->_internal_flush_send_queue(false);
+
+    handler->m_socket = INVALID_SOCKET;
+
+    LeaveCriticalSection(&handler->m_send_queue_cs);
+
+    handler->on_disconnect();
+
+    closesocket(m_session_data.sockets[i]);
+    WSACloseEvent(m_session_data.events[i]);
+    
+    delete handler;
+
+    for(DWORD j = i; j < m_session_data.current_index - 1; j++) {
+        m_session_data.sockets[j] = m_session_data.sockets[j + 1];
+        m_session_data.events[j] = m_session_data.events[j + 1];
+        m_session_data.handlers[j] = m_session_data.handlers[j + 1];
+    }
+    m_session_data.sockets[m_session_data.current_index - 1] = INVALID_SOCKET;
+    m_session_data.events[m_session_data.current_index - 1] = WSA_INVALID_EVENT;
+    m_session_data.handlers[m_session_data.current_index - 1] = nullptr;
+
+    m_session_data.current_index--;
+}

@@ -31,6 +31,9 @@ public:
     virtual ~TCPServerSessionHandler();
 
     virtual void on_connect() = 0;
+
+    // [IMPORTANT]: Stop and join any threads that might reference `this` before returning from this function.
+    // [IMPORTANT]: Calling `send_data` inside this function will have no effect.
     virtual void on_disconnect() = 0;
 
     virtual void on_data(const uint8_t* data, int length) = 0;
@@ -39,16 +42,20 @@ protected:
     TCPServer* m_server{};
     SOCKET m_socket{INVALID_SOCKET};
 
+    void disconnect();
+
     void send_data(const void* data, int length);
 
     void clear_pending_send_queue();
 
 private:
+    CRITICAL_SECTION m_send_queue_cs{};
     std::vector<uint8_t> m_send_queue{};
     size_t m_send_queue_cursor{};
-    CRITICAL_SECTION m_send_queue_cs{};
+    WSAEVENT m_event{WSA_INVALID_EVENT};
+    volatile LONG m_disconnect_requested{0};
 
-    void _internal_on_connect(TCPServer* server, SOCKET s);
+    void _internal_on_connect(TCPServer* server, SOCKET s, WSAEVENT e);
     
     bool _internal_flush_send_queue(bool lock = true);
 
@@ -121,12 +128,16 @@ public:
 
     BOOL request_stop();
 
+    void disconnect_session(TCPServerSessionHandler* handler);
+
 private:
     SessionData m_session_data{};
     BOOLEAN m_wsa_initialized{false};
     HandlerFactoryFuncT m_handler_factory{};
 
     EStatus initialize(uint16_t port, const char* interface_addr, HandlerFactoryFuncT handler_factory);
+
+    void remove_session(DWORD i, bool closed_by_peer);
 };
 
 template<typename session_handler_type>
