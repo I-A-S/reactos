@@ -231,10 +231,27 @@ void TelnetSessionHandler::handle_option_command(ECommand verb, EOption option)
 
         case EOption::BINARY:
         {
+            if (!m_binary_outgoing && verb == ECommand::DO) {
+                m_binary_outgoing = true;
+                send_option_command(ECommand::WILL, EOption::BINARY);
+            } else if (m_binary_outgoing && verb == ECommand::DONT) {
+                m_binary_outgoing = false;
+                send_option_command(ECommand::WONT, EOption::BINARY);
+            }
+
+            if (verb == ECommand::WILL)
+                m_binary_incoming = true;
+            else if (verb == ECommand::WONT)
+                m_binary_incoming = false; 
         }
         break;
 
+        case EOption::TM:
+            send_option_command(ECommand::WILL, EOption::TM);
+            break;
+
         default:
+            send_option_command(ECommand::WONT, option);
             break;
     }
 }
