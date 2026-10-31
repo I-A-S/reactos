@@ -97,5 +97,30 @@ private:
 void TelnetSessionHandler::send_option_command(ECommand verb, EOption option)
 {
     uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)verb, (uint8_t)option, };
+
+    switch (option)
+    {
+        case EOption::ECHO:
+        {
+            if (verb == ECommand::WILL)
+                m_will_echo = true;
+            else if (verb == ECommand::WONT)
+                m_will_echo = false;
+        }
+        break;
+            
+        case EOption::BINARY:
+        {
+            if (verb == ECommand::WILL)
+                m_binary_outgoing = true;
+            else if (verb == ECommand::WONT)
+                m_binary_outgoing = false;
+        }
+        break;
+
+        default:
+            break;
+    }
+
     send_data(data, sizeof(data));
 }

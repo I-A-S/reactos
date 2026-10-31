@@ -247,7 +247,9 @@ void TelnetSessionHandler::handle_option_command(ECommand verb, EOption option)
         break;
 
         case EOption::TM:
-            send_option_command(ECommand::WILL, EOption::TM);
+        case EOption::NAWS:
+        case EOption::TTYPE:
+            send_option_command(ECommand::WILL, option);
             break;
 
         default:
