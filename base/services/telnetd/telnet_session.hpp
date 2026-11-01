@@ -9,6 +9,8 @@
 
 #include "tcpserver.hpp"
 
+#include <string>
+
 class TelnetSessionHandler: public TCPServerSessionHandler
 {
     static constexpr size_t MAX_SUBNEGO_PAYLOAD_LENGTH = 255;
@@ -62,10 +64,18 @@ class TelnetSessionHandler: public TCPServerSessionHandler
 
     enum class EEchoState: uint8_t
     {
-        NONE,
+        INVALID,
         AGREED_TO,
         AGREED_NOT_TO,
         WE_OFFERED_TO,
+    };
+
+    enum class EState: uint8_t
+    {
+        INVALID,
+        WAITING_FOR_USERNAME,
+        WAITING_FOR_PASSWORD,
+        TERMINAL,
     };
 
 private:
@@ -76,6 +86,7 @@ private:
 
     void send_text(const uint8_t* data, int length);
 
+    inline void send_string(const char* str);
     inline void send_option_command(ECommand verb, EOption option);
 
 public:
@@ -97,8 +108,14 @@ private:
     bool m_last_out_was_cr{};
     std::vector<uint8_t> m_out_text_buffer{};
 
-    EEchoState m_echo_state{EEchoState::NONE};
+    EState m_state{EState::INVALID};
+    EEchoState m_echo_state{EEchoState::INVALID};
 };
+
+void TelnetSessionHandler::send_string(const char* str)
+{
+    send_text((const uint8_t*)str, strlen(str));
+}
 
 void TelnetSessionHandler::send_option_command(ECommand verb, EOption option)
 {

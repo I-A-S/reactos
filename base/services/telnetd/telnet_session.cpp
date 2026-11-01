@@ -30,8 +30,8 @@ void TelnetSessionHandler::on_connect()
     send_option_command(ECommand::WILL, EOption::SGA);
     send_option_command(ECommand::DO, EOption::SGA);
 
-    // placeholder login prompt
-    send_text((const uint8_t*)"ReactOS Telnet\nserver login: ", 29);
+    send_string("ReactOS Telnet\nserver login: ");
+    m_state = EState::WAITING_FOR_USERNAME;
 }
 
 void TelnetSessionHandler::on_disconnect()
@@ -172,8 +172,7 @@ void TelnetSessionHandler::handle_command(ECommand cmd)
     {
         case ECommand::AYT:
         {
-            static const char msg[] = "\r\n[ReactOS telnetd: yes]\r\n";
-            send_text((const uint8_t*)msg, sizeof(msg) - 1);
+            send_string("\r\n[ReactOS telnetd: yes]\r\n");
         }
         break;
 
