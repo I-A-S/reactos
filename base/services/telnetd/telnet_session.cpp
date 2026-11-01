@@ -240,20 +240,30 @@ void TelnetSessionHandler::handle_option_command(ECommand verb, EOption option)
         break;
 
         case EOption::TM:
+        {
+            if (verb == ECommand::DO)
+                send_option_command(ECommand::WILL, EOption::TM);
+        }
+        break;
+
         case EOption::NAWS:
         case EOption::TTYPE:
+        {
             if (verb == ECommand::DO)
-                send_option_command(ECommand::WILL, option);
+                send_option_command(ECommand::WONT, option);
             else if (verb == ECommand::WILL)
                 send_option_command(ECommand::DO, option);
-            break;
+        }
+        break;
 
         default:
+        {
             if (verb == ECommand::DO)
                 send_option_command(ECommand::WONT, option);
             else if (verb == ECommand::WILL)
                 send_option_command(ECommand::DONT, option);
-            break;
+        }
+        break;
     }
 }
 

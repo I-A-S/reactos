@@ -98,9 +98,6 @@ private:
     std::vector<uint8_t> m_out_text_buffer{};
 
     EEchoState m_echo_state{EEchoState::NONE};
-
-    bool m_binary_incoming{false};
-    bool m_binary_outgoing{false};
 };
 
 void TelnetSessionHandler::send_option_command(ECommand verb, EOption option)
