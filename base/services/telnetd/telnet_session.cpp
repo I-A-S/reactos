@@ -11,6 +11,13 @@
 
 using cursor_type = const uint8_t*;
 
+constexpr uint8_t CHAR_NULL = 0;
+constexpr uint8_t CHAR_BELL = 7;
+constexpr uint8_t CHAR_BS = 8;
+constexpr uint8_t CHAR_DEL = 127;
+constexpr uint8_t CHAR_CR = '\r';
+constexpr uint8_t CHAR_LF = '\n';
+
 TelnetSessionHandler::TelnetSessionHandler()
 {
     m_sb_buffer.reserve(MAX_SUBNEGO_PAYLOAD_LENGTH);
@@ -165,18 +172,18 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
     {
         const auto c = *cur;
 
-        if (m_text_last_byte_was_cr && (!c || (c == '\n'))) {
+        if (m_text_last_byte_was_cr && (!c || (c == CHAR_LF))) {
             m_text_last_byte_was_cr = false;
             continue;
         }
 
-        if ((m_text_last_byte_was_cr = (c == '\r')) || (c == '\n')) {
+        if ((m_text_last_byte_was_cr = (c == CHAR_CR)) || (c == CHAR_LF)) {
             if (should_echo())
                 send_string("\r\n");
 
             handle_text_line(m_text_line_buffer);
             m_text_line_buffer.clear();
-        } else if ((c == 8) || (c == 127)) {
+        } else if ((c == CHAR_BS) || (c == CHAR_DEL)) {
             if (m_text_line_buffer.size()) {
                 m_text_line_buffer.pop_back();
                 
@@ -184,10 +191,13 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
                     send_string("\b \b");
             }
         } else if ((c >= 32) && (c <= 126)) {
-            m_text_line_buffer.push_back(c);
+            if (m_text_line_buffer.size() < MAX_TEXT_LINE_LENGTH) {
+                m_text_line_buffer.push_back(c);
 
-            if (should_echo())
-                send_text(&c, 1);
+                if (should_echo())
+                    send_text(&c, 1);
+            } else
+                send_data(&CHAR_BELL, 1);
         }
     }
 }

@@ -13,6 +13,7 @@
 
 class TelnetSessionHandler: public TCPServerSessionHandler
 {
+    static constexpr size_t MAX_TEXT_LINE_LENGTH = 8000;
     static constexpr size_t MAX_SUBNEGO_PAYLOAD_LENGTH = 255;
 
     enum class ECommand: uint8_t
