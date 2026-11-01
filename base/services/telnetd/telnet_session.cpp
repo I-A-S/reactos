@@ -38,7 +38,7 @@ void TelnetSessionHandler::on_connect()
     send_option_command(ECommand::WILL, EOption::SGA);
     send_option_command(ECommand::DO, EOption::SGA);
 
-    send_string("ReactOS Telnet\nserver login: ");
+    send_string("ReactOS Telnet\r\nserver login: ");
     m_state = EState::WAITING_FOR_USERNAME;
 }
 
@@ -186,6 +186,9 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
                 m_echo_buffer.push_back(CHAR_LF);
             }
 
+            send_text(m_echo_buffer.data(), m_echo_buffer.size());
+            m_echo_buffer.clear();
+
             handle_text_line(m_text_line_buffer);
             m_text_line_buffer.clear();
         } else if ((c == CHAR_BS) || (c == CHAR_DEL)) {
@@ -205,7 +208,7 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
                 if (should_echo())
                     m_echo_buffer.push_back(c);
             } else
-                send_data(&CHAR_BELL, 1);
+                m_echo_buffer.push_back(CHAR_BELL);
         }
     }
 
@@ -223,6 +226,7 @@ void TelnetSessionHandler::handle_text_line(const std::string& line)
 
         case EState::WAITING_FOR_PASSWORD:
             m_state = EState::TERMINAL;
+            send_string("C:\\ >");
             break;
 
         case EState::TERMINAL:
