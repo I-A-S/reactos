@@ -249,11 +249,17 @@ void TelnetSessionHandler::handle_option_command(ECommand verb, EOption option)
         case EOption::TM:
         case EOption::NAWS:
         case EOption::TTYPE:
-            send_option_command(ECommand::WILL, option);
+            if (verb == ECommand::DO)
+                send_option_command(ECommand::WILL, option);
+            else if (verb == ECommand::WILL)
+                send_option_command(ECommand::DO, option);
             break;
 
         default:
-            send_option_command(ECommand::WONT, option);
+            if (verb == ECommand::DO)
+                send_option_command(ECommand::WONT, option);
+            else if (verb == ECommand::WILL)
+                send_option_command(ECommand::DONT, option);
             break;
     }
 }
