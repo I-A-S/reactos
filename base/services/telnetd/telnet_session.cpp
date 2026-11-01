@@ -204,7 +204,24 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
 
 void TelnetSessionHandler::handle_text_line(const std::string& line)
 {
+    switch (m_state)
+    {
+        case EState::WAITING_FOR_USERNAME:
+            m_state = EState::WAITING_FOR_PASSWORD;
+            send_string("password: ");
+            break;
 
+        case EState::WAITING_FOR_PASSWORD:
+            m_state = EState::TERMINAL;
+            break;
+
+        case EState::TERMINAL:
+            break;
+        
+        default:
+            assert(false);
+            break;
+    }
 }
 
 void TelnetSessionHandler::handle_command(ECommand cmd)
