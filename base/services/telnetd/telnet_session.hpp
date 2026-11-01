@@ -60,6 +60,14 @@ class TelnetSessionHandler: public TCPServerSessionHandler
         MALFORMED_SUBNEGO_AFTER_IAC,
     };
 
+    enum class EEchoState: uint8_t
+    {
+        NONE,
+        AGREED_TO,
+        AGREED_NOT_TO,
+        WE_OFFERED_TO,
+    };
+
 private:
     void handle_text(const uint8_t* data, int length);
     void handle_command(ECommand cmd);
@@ -89,7 +97,8 @@ private:
     bool m_last_out_was_cr{};
     std::vector<uint8_t> m_out_text_buffer{};
 
-    bool m_will_echo{false};
+    EEchoState m_echo_state{EEchoState::NONE};
+
     bool m_binary_incoming{false};
     bool m_binary_outgoing{false};
 };

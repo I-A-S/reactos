@@ -25,6 +25,8 @@ TelnetSessionHandler::~TelnetSessionHandler()
 void TelnetSessionHandler::on_connect()
 {
     send_option_command(ECommand::WILL, EOption::ECHO);
+    m_echo_state = EEchoState::WE_OFFERED_TO;
+
     send_option_command(ECommand::WILL, EOption::SGA);
     send_option_command(ECommand::DO, EOption::SGA);
 
@@ -160,7 +162,7 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
     if (length <= 0)
         return;
 
-    if (m_will_echo)
+    if (m_echo_state == EEchoState::AGREED_TO)
         send_text(data, length);
 }
 
@@ -209,13 +211,21 @@ void TelnetSessionHandler::handle_option_command(ECommand verb, EOption option)
     switch (option) {
         case EOption::ECHO:
         {
-            if (!m_will_echo && verb == ECommand::DO) {
-                m_will_echo = true;
-                send_option_command(ECommand::WILL, EOption::ECHO);
-            } else if (m_will_echo && verb == ECommand::DONT) {
-                m_will_echo = false;
+            if (m_echo_state == EEchoState::WE_OFFERED_TO) {
+                if (verb == ECommand::DO)
+                    m_echo_state = EEchoState::AGREED_TO;
+                else if (verb == ECommand::DONT)
+                    m_echo_state = EEchoState::AGREED_NOT_TO;
+            } else if ((m_echo_state == EEchoState::AGREED_TO) && (verb == ECommand::DONT)) {
+                m_echo_state = EEchoState::AGREED_NOT_TO;
                 send_option_command(ECommand::WONT, EOption::ECHO);
+            } else if ((m_echo_state == EEchoState::AGREED_NOT_TO) && (verb == ECommand::DO)) {
+                m_echo_state = EEchoState::AGREED_TO;
+                send_option_command(ECommand::WILL, EOption::ECHO);
             }
+
+            if (verb == ECommand::WILL)
+                send_option_command(ECommand::DONT, EOption::ECHO);
         }
         break;
 
