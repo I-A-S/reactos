@@ -88,7 +88,12 @@ private:
 
     void send_text(const uint8_t* data, int length);
 
+    void erase_line();
+    void erase_char();
+
+private:
     inline bool should_echo();
+    inline void flush_echo_buffer();
     inline void send_string(const char* str);
     inline void send_option_command(ECommand verb, EOption option);
 
@@ -119,6 +124,14 @@ private:
 
     std::vector<uint8_t> m_echo_buffer{};
 };
+
+void TelnetSessionHandler::flush_echo_buffer()
+{
+    if (m_echo_buffer.empty())
+        return;
+    send_text(m_echo_buffer.data(), m_echo_buffer.size());
+    m_echo_buffer.clear();
+}
 
 void TelnetSessionHandler::send_string(const char* str)
 {

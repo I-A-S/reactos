@@ -14,6 +14,7 @@ using cursor_type = const uint8_t*;
 constexpr uint8_t CHAR_NULL = 0;
 constexpr uint8_t CHAR_BELL = 7;
 constexpr uint8_t CHAR_BS = 8;
+constexpr uint8_t CHAR_NAK = 21;
 constexpr uint8_t CHAR_DEL = 127;
 constexpr uint8_t CHAR_CR = '\r';
 constexpr uint8_t CHAR_LF = '\n';
@@ -169,8 +170,6 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
 {
     const cursor_type end_cur = data + length;
 
-    m_echo_buffer.clear();
-
     for(cursor_type cur = data; cur != end_cur; cur++)
     {
         const auto c = *cur;
@@ -186,21 +185,10 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
                 m_echo_buffer.push_back(CHAR_LF);
             }
 
-            send_text(m_echo_buffer.data(), m_echo_buffer.size());
-            m_echo_buffer.clear();
+            flush_echo_buffer();
 
             handle_text_line(m_text_line_buffer);
             m_text_line_buffer.clear();
-        } else if ((c == CHAR_BS) || (c == CHAR_DEL)) {
-            if (m_text_line_buffer.size()) {
-                m_text_line_buffer.pop_back();
-                
-                if (should_echo()) {
-                    m_echo_buffer.push_back(CHAR_BS);
-                    m_echo_buffer.push_back(' ');
-                    m_echo_buffer.push_back(CHAR_BS);
-                }
-            }
         } else if ((c >= 32) && (c <= 126)) { // [IATODO]: Only accept ASCII for now
             if (m_text_line_buffer.size() < MAX_TEXT_LINE_LENGTH) {
                 m_text_line_buffer.push_back(c);
@@ -209,10 +197,14 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
                     m_echo_buffer.push_back(c);
             } else
                 m_echo_buffer.push_back(CHAR_BELL);
+        } else if ((c == CHAR_BS) || (c == CHAR_DEL)) {
+            erase_char();
+        } else if (c == CHAR_NAK) {
+            erase_line();
         }
     }
 
-    send_text(m_echo_buffer.data(), m_echo_buffer.size());
+    flush_echo_buffer();
 }
 
 void TelnetSessionHandler::handle_text_line(const std::string& line)
@@ -226,7 +218,7 @@ void TelnetSessionHandler::handle_text_line(const std::string& line)
 
         case EState::WAITING_FOR_PASSWORD:
             m_state = EState::TERMINAL;
-            send_string("C:\\ >");
+            send_string("\r\nC:\\ >");
             break;
 
         case EState::TERMINAL:
@@ -261,8 +253,13 @@ void TelnetSessionHandler::handle_command(ECommand cmd)
             break;
 
         case ECommand::EC:
+            erase_char();
+            flush_echo_buffer();
             break;
+
         case ECommand::EL:
+            erase_line();
+            flush_echo_buffer();
             break;
 
         case ECommand::WILL:
@@ -390,4 +387,37 @@ void TelnetSessionHandler::send_text(const uint8_t* data, int length)
     send_data(m_out_text_buffer.data(), (int)m_out_text_buffer.size());
 
     LeaveCriticalSection(&m_out_text_cs);
+}
+
+void TelnetSessionHandler::erase_char()
+{
+    if (m_text_line_buffer.size()) {
+        m_text_line_buffer.pop_back();
+        
+        if (should_echo()) {
+            m_echo_buffer.push_back(CHAR_BS);
+            m_echo_buffer.push_back(' ');
+            m_echo_buffer.push_back(CHAR_BS);
+        }
+    }
+
+    m_text_last_byte_was_cr = false;
+}
+
+void TelnetSessionHandler::erase_line()
+{
+    if (should_echo()) {
+        const auto current_echo_len = m_echo_buffer.size();
+        m_echo_buffer.resize(current_echo_len + m_text_line_buffer.size() * 3);
+
+        for (size_t i = 0; i < m_text_line_buffer.size(); i++) {
+            const auto idx= current_echo_len + (i * 3);
+            m_echo_buffer[idx + 1] = ' ';
+            m_echo_buffer[idx + 0] = m_echo_buffer[idx + 2] = CHAR_BS;
+        }
+    }
+
+    m_text_line_buffer.clear();
+
+    m_text_last_byte_was_cr = false;
 }
