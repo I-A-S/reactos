@@ -159,11 +159,42 @@ void TelnetSessionHandler::on_data(const uint8_t* data, int length)
 
 void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
 {
-    if (length <= 0)
-        return;
+    const cursor_type end_cur = data + length;
 
-    if (m_echo_state == EEchoState::AGREED_TO)
-        send_text(data, length);
+    for(cursor_type cur = data; cur != end_cur; cur++)
+    {
+        const auto c = *cur;
+
+        if (m_text_last_byte_was_cr && (!c || (c == '\n'))) {
+            m_text_last_byte_was_cr = false;
+            continue;
+        }
+
+        if ((m_text_last_byte_was_cr = (c == '\r')) || (c == '\n')) {
+            if (should_echo())
+                send_string("\r\n");
+
+            handle_text_line(m_text_line_buffer);
+            m_text_line_buffer.clear();
+        } else if ((c == 8) || (c == 127)) {
+            if (m_text_line_buffer.size()) {
+                m_text_line_buffer.pop_back();
+                
+                if (should_echo())
+                    send_string("\b \b");
+            }
+        } else if ((c >= 32) && (c <= 126)) {
+            m_text_line_buffer.push_back(c);
+
+            if (should_echo())
+                send_text(&c, 1);
+        }
+    }
+}
+
+void TelnetSessionHandler::handle_text_line(const std::string& line)
+{
+
 }
 
 void TelnetSessionHandler::handle_command(ECommand cmd)

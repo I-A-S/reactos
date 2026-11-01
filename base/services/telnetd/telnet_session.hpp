@@ -80,12 +80,14 @@ class TelnetSessionHandler: public TCPServerSessionHandler
 
 private:
     void handle_text(const uint8_t* data, int length);
+    void handle_text_line(const std::string& line);
     void handle_command(ECommand cmd);
     void handle_option_command(ECommand verb, EOption option);
     void handle_subnegotiation(uint8_t option, const uint8_t* params, uint8_t length);
 
     void send_text(const uint8_t* data, int length);
 
+    inline bool should_echo();
     inline void send_string(const char* str);
     inline void send_option_command(ECommand verb, EOption option);
 
@@ -110,6 +112,9 @@ private:
 
     EState m_state{EState::INVALID};
     EEchoState m_echo_state{EEchoState::INVALID};
+
+    bool m_text_last_byte_was_cr{};
+    std::string m_text_line_buffer{};
 };
 
 void TelnetSessionHandler::send_string(const char* str)
@@ -121,4 +126,9 @@ void TelnetSessionHandler::send_option_command(ECommand verb, EOption option)
 {
     uint8_t data[3] = { (uint8_t)ECommand::IAC, (uint8_t)verb, (uint8_t)option, };
     send_data(data, sizeof(data));
+}
+
+bool TelnetSessionHandler::should_echo()
+{
+    return (m_echo_state == EEchoState::AGREED_TO) && (m_state != EState::WAITING_FOR_PASSWORD);
 }
