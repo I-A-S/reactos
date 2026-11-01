@@ -116,6 +116,8 @@ private:
 
     bool m_text_last_byte_was_cr{};
     std::string m_text_line_buffer{};
+
+    std::vector<uint8_t> m_echo_buffer{};
 };
 
 void TelnetSessionHandler::send_string(const char* str)

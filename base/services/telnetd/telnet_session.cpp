@@ -20,6 +20,7 @@ constexpr uint8_t CHAR_LF = '\n';
 
 TelnetSessionHandler::TelnetSessionHandler()
 {
+    m_echo_buffer.reserve(1024);
     m_sb_buffer.reserve(MAX_SUBNEGO_PAYLOAD_LENGTH);
     InitializeCriticalSection(&m_out_text_cs);
 }
@@ -168,6 +169,8 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
 {
     const cursor_type end_cur = data + length;
 
+    m_echo_buffer.clear();
+
     for(cursor_type cur = data; cur != end_cur; cur++)
     {
         const auto c = *cur;
@@ -178,8 +181,10 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
         }
 
         if ((m_text_last_byte_was_cr = (c == CHAR_CR)) || (c == CHAR_LF)) {
-            if (should_echo())
-                send_string("\r\n");
+            if (should_echo()) {
+                m_echo_buffer.push_back(CHAR_CR);
+                m_echo_buffer.push_back(CHAR_LF);
+            }
 
             handle_text_line(m_text_line_buffer);
             m_text_line_buffer.clear();
@@ -187,19 +192,24 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
             if (m_text_line_buffer.size()) {
                 m_text_line_buffer.pop_back();
                 
-                if (should_echo())
-                    send_string("\b \b");
+                if (should_echo()) {
+                    m_echo_buffer.push_back(CHAR_BS);
+                    m_echo_buffer.push_back(' ');
+                    m_echo_buffer.push_back(CHAR_BS);
+                }
             }
-        } else if ((c >= 32) && (c <= 126)) {
+        } else if ((c >= 32) && (c <= 126)) { // [IATODO]: Only accept ASCII for now
             if (m_text_line_buffer.size() < MAX_TEXT_LINE_LENGTH) {
                 m_text_line_buffer.push_back(c);
 
                 if (should_echo())
-                    send_text(&c, 1);
+                    m_echo_buffer.push_back(c);
             } else
                 send_data(&CHAR_BELL, 1);
         }
     }
+
+    send_text(m_echo_buffer.data(), m_echo_buffer.size());
 }
 
 void TelnetSessionHandler::handle_text_line(const std::string& line)
