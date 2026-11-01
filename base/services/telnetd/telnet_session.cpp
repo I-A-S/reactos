@@ -24,7 +24,6 @@ TelnetSessionHandler::~TelnetSessionHandler()
 
 void TelnetSessionHandler::on_connect()
 {
-    m_will_echo = true;
     send_option_command(ECommand::WILL, EOption::ECHO);
     send_option_command(ECommand::WILL, EOption::SGA);
     send_option_command(ECommand::DO, EOption::SGA);
@@ -161,7 +160,8 @@ void TelnetSessionHandler::handle_text(const uint8_t* data, int length)
     if (length <= 0)
         return;
 
-    send_text(data, length);
+    if (m_will_echo)
+        send_text(data, length);
 }
 
 void TelnetSessionHandler::handle_command(ECommand cmd)
