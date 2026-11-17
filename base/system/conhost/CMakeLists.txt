@@ -3,7 +3,7 @@ set(WINSRV_DIR "${REACTOS_SOURCE_DIR}/win32ss/user/winsrv")
 set(CONSRV_DIR "${WINSRV_DIR}/consrv")
 
 set(SRC_FILES
-  conhost.cpp
+  conhost.c
   conhost.rc
 
   ${CONSRV_DIR}/frontends/gui/text.c
@@ -22,6 +22,7 @@ add_executable(conhost ${SRC_FILES})
 target_include_directories(conhost PRIVATE
   ${CONSRV_DIR}
   ${WINSRV_DIR}
+  ${CONSRV_DIR}/include
   ${REACTOS_SOURCE_DIR}/win32ss/include
   ${REACTOS_SOURCE_DIR}/sdk/include/reactos/subsys
 )
