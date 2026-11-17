@@ -11,6 +11,15 @@ set(SRC_FILES
   ${CONSRV_DIR}/frontends/gui/graphics.c
   ${CONSRV_DIR}/frontends/gui/fullscreen.c
   ${CONSRV_DIR}/frontends/gui/guisettings.c
+  ${CONSRV_DIR}/condrv/coninput.c
+  ${CONSRV_DIR}/condrv/conoutput.c
+  ${CONSRV_DIR}/condrv/console.c
+  ${CONSRV_DIR}/condrv/dummyterm.c
+  ${CONSRV_DIR}/condrv/graphics.c
+  ${CONSRV_DIR}/condrv/text.c
+  ${CONSRV_DIR}/frontends/input.c
+  ${CONSRV_DIR}/frontends/wcwidth.c
+  ${CONSRV_DIR}/settings.c
 )
 
 #
@@ -35,9 +44,14 @@ target_include_directories(conhost PRIVATE
   ${REACTOS_SOURCE_DIR}/win32ss/include
   ${REACTOS_SOURCE_DIR}/sdk/include/reactos/subsys
 )
+target_link_libraries(conhost
+  concfg
+  win32ksys
+  ${PSEH_LIB}
+)
 
 set_module_type(conhost win32gui UNICODE)
 
-add_importlibs(conhost msvcrt kernel32 ntdll user32 gdi32)
+add_importlibs(conhost msvcrt kernel32 ntdll user32 gdi32 shell32 advapi32)
 
 add_cd_file(TARGET conhost DESTINATION reactos/system32 FOR all)
