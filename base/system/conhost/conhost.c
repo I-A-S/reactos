@@ -5,7 +5,7 @@
  * COPYRIGHT:   Copyright 2026 Aravinda Samarathunga
  */
 
-#include <windows.h>
+#include <consrv.h>
 
 #define NDEBUG
 #include <debug.h>

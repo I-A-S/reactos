@@ -4,7 +4,6 @@ set(CONSRV_DIR "${WINSRV_DIR}/consrv")
 
 set(SRC_FILES
   conhost.c
-  conhost.rc
 
   ${CONSRV_DIR}/frontends/gui/text.c
   ${CONSRV_DIR}/frontends/gui/conwnd.c
@@ -14,10 +13,20 @@ set(SRC_FILES
   ${CONSRV_DIR}/frontends/gui/guisettings.c
 )
 
+#
+# Explicitly enable MS extensions to be able to use unnamed (anonymous) nested structs.
+#
+if(NOT MSVC)
+  set_source_files_properties(${SRC_FILES} PROPERTIES COMPILE_OPTIONS "-fms-extensions")
+endif()
+
 remove_definitions(-D_WIN32_WINNT=0x502)
 add_definitions(-D_WIN32_WINNT=0x600)
 
-add_executable(conhost ${SRC_FILES})
+add_executable(conhost
+  conhost.rc
+  ${SRC_FILES}
+)
 
 target_include_directories(conhost PRIVATE
   ${CONSRV_DIR}
