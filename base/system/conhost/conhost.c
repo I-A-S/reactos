@@ -7,14 +7,31 @@
 
 #include <consrv.h>
 
+#include <include/console.h>
+#include <console.h>
+#include <concfg/settings.h>
+
 #define NDEBUG
 #include <debug.h>
 
 HANDLE    ConSrvHeap;
 HINSTANCE ConSrvDllInstance;
 
+VOID
+ConSrvInitObject(PCONSOLE_IO_OBJECT Object,
+    CONSOLE_IO_OBJECT_TYPE Type,
+    PCONSOLE Console)
+{
+    Object->Type = Type;
+    Object->Console = Console;
+    Object->AccessRead = 0;
+    Object->AccessWrite = 0;
+    Object->ExclusiveRead = 0;
+    Object->ExclusiveWrite = 0;
+    Object->ReferenceCount = 0;
+}
+
 // HACK
-VOID ConSrvInitObject(PCONSOLE_IO_OBJECT Object, CONSOLE_IO_OBJECT_TYPE Type, PCONSOLE Console) {}
 VOID HistoryReshapeAllBuffers(PCONSRV_CONSOLE C, ULONG a, ULONG b, BOOLEAN c) {}
 VOID ConioPause(PCONSRV_CONSOLE Console, UCHAR Flags) {}
 VOID ConioUnpause(PCONSRV_CONSOLE Console, UCHAR Flags) {}

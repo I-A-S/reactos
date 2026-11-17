@@ -18,6 +18,7 @@ set(SRC_FILES
   ${CONSRV_DIR}/condrv/graphics.c
   ${CONSRV_DIR}/condrv/text.c
   ${CONSRV_DIR}/frontends/input.c
+  ${CONSRV_DIR}/frontends/terminal.c
   ${CONSRV_DIR}/frontends/wcwidth.c
   ${CONSRV_DIR}/settings.c
 )
