@@ -10,6 +10,20 @@
 #define NDEBUG
 #include <debug.h>
 
+HANDLE    ConSrvHeap;
+HINSTANCE ConSrvDllInstance;
+
+// HACK
+VOID ConSrvInitObject(PCONSOLE_IO_OBJECT Object, CONSOLE_IO_OBJECT_TYPE Type, PCONSOLE Console) {}
+VOID HistoryReshapeAllBuffers(PCONSRV_CONSOLE C, ULONG a, ULONG b, BOOLEAN c) {}
+VOID ConioPause(PCONSRV_CONSOLE Console, UCHAR Flags) {}
+VOID ConioUnpause(PCONSRV_CONSOLE Console, UCHAR Flags) {}
+PCONSOLE_PROCESS_DATA NTAPI ConSrvGetConsoleLeaderProcess(PCONSRV_CONSOLE Console) { return NULL; }
+NTSTATUS NTAPI ConSrvConsoleProcessCtrlEvent(PCONSRV_CONSOLE C, ULONG g, ULONG e) { return STATUS_NOT_IMPLEMENTED; }
+NTSTATUS NTAPI ConSrvSetConsoleProcessFocus(PCONSRV_CONSOLE C, BOOLEAN f) { return STATUS_NOT_IMPLEMENTED; }
+NTSTATUS ConioProcessInputEvent(PCONSRV_CONSOLE C, PINPUT_RECORD e) { return STATUS_NOT_IMPLEMENTED; }
+// HACK
+
 NTSTATUS NTAPI
 GuiLoadFrontEnd(IN OUT PFRONTEND FrontEnd,
                 IN OUT PCONSOLE_STATE_INFO ConsoleInfo,

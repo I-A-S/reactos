@@ -30,7 +30,6 @@ if(NOT MSVC)
 endif()
 
 remove_definitions(-D_WIN32_WINNT=0x502)
-add_definitions(-D_WIN32_WINNT=0x600)
 
 add_executable(conhost
   conhost.rc
@@ -44,10 +43,16 @@ target_include_directories(conhost PRIVATE
   ${REACTOS_SOURCE_DIR}/win32ss/include
   ${REACTOS_SOURCE_DIR}/sdk/include/reactos/subsys
 )
+
 target_link_libraries(conhost
   concfg
   win32ksys
   ${PSEH_LIB}
+)
+
+target_compile_definitions(conhost PRIVATE
+  -DBUILDING_CONHOST=1
+  -D_WIN32_WINNT=0x600
 )
 
 set_module_type(conhost win32gui UNICODE)
