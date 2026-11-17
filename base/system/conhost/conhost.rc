@@ -1,4 +1,11 @@
+#include <windef.h>
+#include <winuser.h>
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+
 #define REACTOS_STR_FILE_DESCRIPTION  "Console Host"
 #define REACTOS_STR_INTERNAL_NAME     "conhost"
 #define REACTOS_STR_ORIGINAL_FILENAME "conhost.exe"
 #include <reactos/version.rc>
+
+#include "consrv.rc"

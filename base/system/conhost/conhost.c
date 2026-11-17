@@ -42,12 +42,18 @@ NTSTATUS ConioProcessInputEvent(PCONSRV_CONSOLE C, PINPUT_RECORD e) { return STA
 // HACK
 
 NTSTATUS NTAPI
-GuiLoadFrontEnd(IN OUT PFRONTEND FrontEnd,
-                IN OUT PCONSOLE_STATE_INFO ConsoleInfo,
-                IN OUT PCONSOLE_INIT_INFO ConsoleInitInfo,
-                IN HANDLE ConsoleLeaderProcessHandle);
+ConSrvInitTerminal(IN OUT PTERMINAL Terminal,
+                   IN OUT PCONSOLE_STATE_INFO ConsoleInfo,
+                   IN OUT PCONSOLE_INIT_INFO ConsoleInitInfo,
+                   IN HANDLE ConsoleLeaderProcessHandle);
+
 NTSTATUS NTAPI
-GuiUnloadFrontEnd(IN OUT PFRONTEND FrontEnd);
+ConDrvWriteConsole(IN PCONSOLE Console,
+                   IN PTEXTMODE_SCREEN_BUFFER ScreenBuffer,
+                   IN BOOLEAN Unicode,
+                   IN PVOID StringBuffer,
+                   IN ULONG NumCharsToWrite,
+                   OUT PULONG NumCharsWritten OPTIONAL);
 
 INT
 WINAPI
@@ -58,8 +64,6 @@ wWinMain(
     INT nCmdShow)
 {
     DPRINT1("conhost: %S\n", lpCmdLine);
-
-    GuiUnloadFrontEnd(NULL);
 
     return 0;
 }
