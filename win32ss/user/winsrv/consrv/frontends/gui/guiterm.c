@@ -262,12 +262,14 @@ GuiConsoleInputThread(PVOID Param)
 Quit:
     DPRINT("CONSRV: Quit the Input Thread 0x%p, Status = 0x%08lx\n", InputThreadId, Status);
 
+#ifndef BUILDING_CONHOST
     /* Remove this console input thread from this desktop */
     // DesktopConsoleThreadInfo.DesktopHandle;
     DesktopConsoleThreadInfo.ThreadId = 0;
     NtUserConsoleControl(ConsoleCtrlDesktopConsoleThread,
                          &DesktopConsoleThreadInfo,
                          sizeof(DesktopConsoleThreadInfo));
+#endif
 
     /* Close the duplicated desktop handle */
     CloseDesktop(DesktopConsoleThreadInfo.DesktopHandle); // NtUserCloseDesktop
@@ -295,7 +297,9 @@ GuiInit(IN PCONSOLE_INIT_INFO ConsoleInitInfo,
         IN OUT PGUI_INIT_INFO GuiInitInfo)
 {
     BOOL Success = TRUE;
+#ifndef BUILDING_CONHOST
     UNICODE_STRING DesktopPath;
+#endif
     DESKTOP_CONSOLE_THREAD DesktopConsoleThreadInfo;
     HWINSTA hWinSta;
     HDESK hDesk;
@@ -320,11 +324,42 @@ GuiInit(IN PCONSOLE_INIT_INFO ConsoleInitInfo,
      * Set-up the console input thread. We have
      * one console input thread per desktop.
      */
-#ifndef BUILDING_CONHOST
+#ifdef BUILDING_CONHOST
+    /*
+     * conhost is started on the desktop of the application it serves,
+     * so use its own window station and desktop. Duplicate them, so that
+     * the frontend owns them, just like what NtUserResolveDesktop
+     * does for consrv.
+     */
+    hWinSta = NULL;
+    hDesk = NULL;
+    Status = NtDuplicateObject(NtCurrentProcess(),
+                               GetProcessWindowStation(),
+                               NtCurrentProcess(),
+                               (PHANDLE)&hWinSta,
+                               0, 0, DUPLICATE_SAME_ACCESS);
+    if (NT_SUCCESS(Status))
+    {
+        Status = NtDuplicateObject(NtCurrentProcess(),
+                                   GetThreadDesktop(GetCurrentThreadId()),
+                                   NtCurrentProcess(),
+                                   (PHANDLE)&hDesk,
+                                   0, 0, DUPLICATE_SAME_ACCESS);
+    }
+    if (!NT_SUCCESS(Status))
+    {
+        DPRINT1("CONSRV: Failed to duplicate the desktop handles, Status = 0x%08lx\n", Status);
+        if (hWinSta) CloseWindowStation(hWinSta);
+        return FALSE;
+    }
+
+    /* A conhost always hosts a single console, so create its own input thread */
+    DesktopConsoleThreadInfo.DesktopHandle = hDesk;
+    DesktopConsoleThreadInfo.ThreadId = 0;
+#else
     if (!CsrImpersonateClient(NULL))
         // return STATUS_BAD_IMPERSONATION_LEVEL;
         return FALSE;
-#endif
 
     if (ConsoleInitInfo->DesktopLength)
     {
@@ -344,9 +379,7 @@ GuiInit(IN PCONSOLE_INIT_INFO ConsoleInitInfo,
     DPRINT("NtUserResolveDesktop(DesktopPath = '%wZ') returned hDesk = 0x%p; hWinSta = 0x%p\n",
            &DesktopPath, hDesk, hWinSta);
 
-#ifndef BUILDING_CONHOST
     CsrRevertToSelf();
-#endif
 
     if (hDesk == NULL) return FALSE;
 
@@ -360,6 +393,7 @@ GuiInit(IN PCONSOLE_INIT_INFO ConsoleInitInfo,
                          &DesktopConsoleThreadInfo,
                          sizeof(DesktopConsoleThreadInfo));
     DPRINT("NtUserConsoleControl returned ThreadId = 0x%p\n", DesktopConsoleThreadInfo.ThreadId);
+#endif
 
     /*
      * Save the opened window station and desktop handles in the initialization

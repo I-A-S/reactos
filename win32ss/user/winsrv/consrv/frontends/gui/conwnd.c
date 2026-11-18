@@ -170,10 +170,12 @@ RegisterConWndClass(IN HINSTANCE hInstance)
     {
         DPRINT1("Failed to register GUI console class\n");
     }
+#ifndef BUILDING_CONHOST
     else
     {
         NtUserConsoleControl(GuiConsoleWndClassAtom, &WndClassAtom, sizeof(ATOM));
     }
+#endif
 
     return (WndClassAtom != 0);
 }
