@@ -101,6 +101,7 @@ ConvertInputUnicodeToAnsi(PCONSRV_CONSOLE Console,
 
 /* PRIVATE FUNCTIONS **********************************************************/
 
+#ifndef BUILDING_CONHOST 
 static PALIAS_HEADER
 IntFindAliasHeader(PCONSRV_CONSOLE Console,
                    PVOID    ExeName,
@@ -423,6 +424,7 @@ IntGetAllConsoleAliasesLength(PALIAS_HEADER Header,
 
     return Length;
 }
+#endif
 
 VOID
 IntDeleteAllAliases(PCONSRV_CONSOLE Console)
@@ -444,6 +446,8 @@ IntDeleteAllAliases(PCONSRV_CONSOLE Console)
 
 
 /* PUBLIC SERVER APIS *********************************************************/
+
+#ifndef BUILDING_CONHOST 
 
 /* API_NUMBER: ConsolepAddAlias */
 CON_API(SrvAddConsoleAlias,
@@ -817,5 +821,7 @@ CON_API(SrvGetConsoleAliasExesLength,
 
     return STATUS_SUCCESS;
 }
+
+#endif
 
 /* EOF */
