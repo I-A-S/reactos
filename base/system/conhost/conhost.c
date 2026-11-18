@@ -39,6 +39,7 @@ PCONSOLE_PROCESS_DATA NTAPI ConSrvGetConsoleLeaderProcess(PCONSRV_CONSOLE Consol
 NTSTATUS NTAPI ConSrvConsoleProcessCtrlEvent(PCONSRV_CONSOLE C, ULONG g, ULONG e) { return STATUS_NOT_IMPLEMENTED; }
 NTSTATUS NTAPI ConSrvSetConsoleProcessFocus(PCONSRV_CONSOLE C, BOOLEAN f) { return STATUS_NOT_IMPLEMENTED; }
 NTSTATUS ConioProcessInputEvent(PCONSRV_CONSOLE C, PINPUT_RECORD e) { return STATUS_NOT_IMPLEMENTED; }
+VOID LineInputKeyDown(PCONSRV_CONSOLE Console, PUNICODE_STRING ExeName, KEY_EVENT_RECORD *KeyEvent) {}
 // HACK
 
 NTSTATUS NTAPI
@@ -63,7 +64,27 @@ wWinMain(
     LPWSTR lpCmdLine,
     INT nCmdShow)
 {
-    DPRINT1("conhost: %S\n", lpCmdLine);
+    NTSTATUS Status;
+    TERMINAL Terminal;
+    CONSOLE_INIT_INFO ConsoleInitInfo;
+
+    BYTE ConsoleInfoBuffer[sizeof(CONSOLE_STATE_INFO) + MAX_PATH * sizeof(WCHAR)];
+    PCONSOLE_STATE_INFO ConsoleInfo = (PCONSOLE_STATE_INFO)ConsoleInfoBuffer;
+
+    DPRINT1("CONHOST: starting with args \"%S\"..\n", lpCmdLine);
+
+    ConSrvHeap = RtlGetProcessHeap();
+
+    RtlZeroMemory(&ConsoleInitInfo, sizeof(ConsoleInitInfo));
+    RtlZeroMemory(ConsoleInfoBuffer, sizeof(ConsoleInfoBuffer));
+
+    Status = ConSrvInitTerminal(&Terminal, ConsoleInfo, &ConsoleInitInfo, NtCurrentProcess());
+    if (!NT_SUCCESS(Status)) {
+        DPRINT1("CONHOST: ConSrvInitTerminal failed, Status = 0x%08lx\n", Status);
+        return 1;
+    }
+
+    DPRINT1("CONHOST: exiting normally..\n");
 
     return 0;
 }
