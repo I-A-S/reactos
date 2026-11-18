@@ -1450,6 +1450,7 @@ ConSrvConsoleProcessCtrlEvent(IN PCONSRV_CONSOLE Console,
     return Status;
 }
 
+#ifndef CONSRV_STANDALONE
 VOID
 ConSrvSetProcessFocus(IN PCSR_PROCESS CsrProcess,
                       IN BOOLEAN SetForeground)
@@ -1457,13 +1458,12 @@ ConSrvSetProcessFocus(IN PCSR_PROCESS CsrProcess,
     // FIXME: Call NtUserSetInformationProcess (currently unimplemented!)
     // for setting Win32 foreground/background flags.
 
-#ifndef CONSRV_STANDALONE 
     if (SetForeground)
         CsrSetForegroundPriority(CsrProcess);
     else
         CsrSetBackgroundPriority(CsrProcess);
-#endif
 }
+#endif
 
 NTSTATUS NTAPI
 ConSrvSetConsoleProcessFocus(IN PCONSRV_CONSOLE Console,

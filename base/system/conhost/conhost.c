@@ -17,6 +17,27 @@
 HANDLE    ConSrvHeap;
 HINSTANCE ConSrvDllInstance;
 
+VOID
+ConSrvSetProcessFocus(IN PCSR_PROCESS CsrProcess,
+                      IN BOOLEAN SetForeground)
+{
+    NTSTATUS Status;
+    PROCESS_FOREGROUND_BACKGROUND Info;
+    HANDLE hProcess = NtCurrentProcess();
+
+    Info.Foreground = SetForeground;
+
+    Status = NtSetInformationProcess(hProcess,
+        ProcessForegroundInformation,
+        &Info,
+        sizeof(Info)
+    );
+    if (!NT_SUCCESS(Status))
+    {
+        DPRINT1("CONHOST: NtSetInformationProcess(ProcessForegroundInformation) failed, Status = 0x%08lx\n", Status);
+    }    
+}
+
 // HACK
 NTSTATUS ConioProcessInputEvent(PCONSRV_CONSOLE C, PINPUT_RECORD e) { return STATUS_NOT_IMPLEMENTED; }
 // HACK
