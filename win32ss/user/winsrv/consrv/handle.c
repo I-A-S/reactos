@@ -58,6 +58,7 @@ ConSrvCloseHandle(IN PCONSOLE_IO_HANDLE Handle)
     PCONSOLE_IO_OBJECT Object = Handle->Object;
     if (Object != NULL)
     {
+#ifndef BUILDING_CONHOST 
         /*
          * If this is a input handle, notify and dereference
          * all the waits related to this handle.
@@ -85,6 +86,7 @@ ConSrvCloseHandle(IN PCONSOLE_IO_HANDLE Handle)
                 CsrDereferenceWait(&Console->ReadWaitQueue);
             }
         }
+#endif
 
         /* If the last handle to a screen buffer is closed, delete it... */
         if (AdjustHandleCounts(Handle, -1) == 0)
@@ -389,6 +391,8 @@ ConSrvReleaseObject(IN PCONSOLE_IO_OBJECT Object,
 
 /* PUBLIC SERVER APIS *********************************************************/
 
+#ifndef BUILDING_CONHOST
+
 /* API_NUMBER: ConsolepOpenConsole */
 CON_API(SrvOpenConsole,
         CONSOLE_OPENCONSOLE, OpenConsoleRequest)
@@ -619,5 +623,7 @@ CON_API(SrvVerifyConsoleIoHandle,
 
     return STATUS_SUCCESS;
 }
+
+#endif
 
 /* EOF */
