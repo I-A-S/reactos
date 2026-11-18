@@ -13,7 +13,7 @@
 
 #include <consrv.h>
 
-//#define NDEBUG
+#define NDEBUG
 #include <debug.h>
 
 #include "concfg/font.h"
