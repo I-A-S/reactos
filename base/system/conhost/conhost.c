@@ -17,6 +17,30 @@
 HANDLE    ConSrvHeap;
 HINSTANCE ConSrvDllInstance;
 
+// Copied from `RtlCreateUnicodeString`
+// and modified to use ConsoleAllocHeap
+BOOLEAN
+NTAPI
+ConsoleCreateUnicodeString(
+    IN OUT PUNICODE_STRING UniDest,
+    IN PCWSTR  Source)
+{
+    SIZE_T Size;
+
+    Size = (wcslen(Source) + 1) * sizeof(WCHAR);
+    if (Size > MAXUSHORT) return FALSE;
+
+    UniDest->Buffer = ConsoleAllocHeap(0, Size);
+
+    if (UniDest->Buffer == NULL) return FALSE;
+
+    RtlCopyMemory(UniDest->Buffer, Source, Size);
+    UniDest->MaximumLength = (USHORT)Size;
+    UniDest->Length = (USHORT)Size - sizeof (WCHAR);
+
+    return TRUE;
+}
+
 VOID
 ConSrvInitObject(PCONSOLE_IO_OBJECT Object,
     CONSOLE_IO_OBJECT_TYPE Type,
@@ -128,8 +152,8 @@ wWinMain(
 
     RtlCopyMemory(Console->Colors, ConsoleInfo->ColorTable, sizeof(ConsoleInfo->ColorTable));
 
-    RtlInitUnicodeStringEx(&Console->OriginalTitle, ConsoleInfo->ConsoleTitle);
-    RtlInitUnicodeStringEx(&Console->Title, ConsoleInfo->ConsoleTitle);
+    ConsoleCreateUnicodeString(&Console->OriginalTitle, ConsoleInfo->ConsoleTitle);
+    ConsoleCreateUnicodeString(&Console->Title, ConsoleInfo->ConsoleTitle);
 
     InitializeListHead(&Console->ProcessList);
     InitializeListHead(&Console->ReadWaitQueue);
