@@ -19,7 +19,7 @@ HINSTANCE ConSrvDllInstance;
 
 // Copied from `RtlCreateUnicodeString`
 // and modified to use ConsoleAllocHeap
-// TODO: Just noticed someone already has done that in console.c too
+// [TODO]: Just noticed someone already has done that in console.c too
 // maybe time to move its def to a header
 static BOOLEAN NTAPI
 ConsoleCreateUnicodeString(
@@ -56,10 +56,36 @@ ConSrvInitObject(PCONSOLE_IO_OBJECT Object,
     Object->ReferenceCount = 0;
 }
 
+VOID
+ConioPause(PCONSRV_CONSOLE Console, UCHAR Flags)
+{
+    Console->PauseFlags |= Flags;
+    ConDrvPause((PCONSOLE)Console);
+}
+
+VOID
+ConioUnpause(PCONSRV_CONSOLE Console, UCHAR Flags)
+{
+    Console->PauseFlags &= ~Flags;
+
+    if (Console->PauseFlags == 0)
+    {
+        ConDrvUnpause((PCONSOLE)Console);
+
+        // [IATODO]
+        // CsrNotifyWait(&Console->WriteWaitQueue,
+        //               TRUE,
+        //               NULL,
+        //               NULL);
+        // if (!IsListEmpty(&Console->WriteWaitQueue))
+        // {
+        //     CsrDereferenceWait(&Console->WriteWaitQueue);
+        // }
+    }
+}
+
 // HACK
 VOID HistoryReshapeAllBuffers(PCONSRV_CONSOLE C, ULONG a, ULONG b, BOOLEAN c) {}
-//VOID ConioPause(PCONSRV_CONSOLE Console, UCHAR Flags) {}
-VOID ConioUnpause(PCONSRV_CONSOLE Console, UCHAR Flags) {}
 PCONSOLE_PROCESS_DATA NTAPI ConSrvGetConsoleLeaderProcess(PCONSRV_CONSOLE Console) { return NULL; }
 NTSTATUS NTAPI ConSrvConsoleProcessCtrlEvent(PCONSRV_CONSOLE C, ULONG g, ULONG e) { return STATUS_NOT_IMPLEMENTED; }
 NTSTATUS NTAPI ConSrvSetConsoleProcessFocus(PCONSRV_CONSOLE C, BOOLEAN f) { return STATUS_NOT_IMPLEMENTED; }
