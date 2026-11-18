@@ -11,7 +11,7 @@
 #include <console.h>
 #include <concfg/settings.h>
 
-#define NDEBUG
+//#define NDEBUG
 #include <debug.h>
 
 HANDLE    ConSrvHeap;
@@ -67,6 +67,7 @@ wWinMain(
     static const WCHAR Title[] = L"ReactOS Console Host";
 
     NTSTATUS Status;
+    HWND hWnd;
     TERMINAL Terminal;
     PCONSRV_CONSOLE Console;
     
@@ -77,7 +78,7 @@ wWinMain(
     BYTE ConsoleInfoBuffer[sizeof(CONSOLE_STATE_INFO) + MAX_PATH * sizeof(WCHAR)];
     PCONSOLE_STATE_INFO ConsoleInfo = (PCONSOLE_STATE_INFO)ConsoleInfoBuffer;
 
-    DPRINT1("CONHOST: starting with args \"%S\"..\n", lpCmdLine);
+    DPRINT("CONHOST: Starting with args \"%S\"..\n", lpCmdLine);
 
     ConSrvDllInstance = hInst;
     ConSrvHeap = RtlGetProcessHeap();
@@ -125,7 +126,41 @@ wWinMain(
         return 1;
     }
 
-    DPRINT1("CONHOST: exiting normally..\n");
+    RtlCopyMemory(Console->Colors, ConsoleInfo->ColorTable, sizeof(ConsoleInfo->ColorTable));
+
+    RtlInitUnicodeStringEx(&Console->OriginalTitle, ConsoleInfo->ConsoleTitle);
+    RtlInitUnicodeStringEx(&Console->Title, ConsoleInfo->ConsoleTitle);
+
+    InitializeListHead(&Console->ProcessList);
+    InitializeListHead(&Console->ReadWaitQueue);
+    InitializeListHead(&Console->WriteWaitQueue);
+    InitializeListHead(&Console->HistoryBuffers);
+    InitializeListHead(&Console->PopupWindows);
+
+    Console->MaxNumberOfHistoryBuffers = ConsoleInfo->NumberOfHistoryBuffers;
+    Console->HistoryBufferSize = ConsoleInfo->HistoryBufferSize;
+    Console->HistoryNoDup      = ConsoleInfo->HistoryNoDup;
+    Console->LineInsertToggle  = ConsoleInfo->InsertMode;
+    Console->InsertMode        = ConsoleInfo->InsertMode;
+    Console->QuickEdit         = ConsoleInfo->QuickEdit;
+
+    Status = ConDrvAttachTerminal((PCONSOLE)Console, &Terminal);
+    if (!NT_SUCCESS(Status))
+    {
+        DPRINT1("CONHOST: ConDrvAttachTerminal failed, Status = 0x%08lx\n", Status);
+        return 1;
+    }
+
+    DPRINT("CONHOST: Initialized successfully!\n");
+
+    hWnd = Console->FrontEndIFace.Vtbl->GetConsoleWindowHandle(&Console->FrontEndIFace);
+    while (1)
+    {
+        if (!hWnd || !IsWindow(hWnd)) break;
+        Sleep(100);
+    }
+
+    DPRINT("CONHOST: Exiting normally..\n");
 
     return 0;
 }
