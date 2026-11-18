@@ -37,97 +37,55 @@ wWinMain(
     LPWSTR lpCmdLine,
     INT nCmdShow)
 {
-    static const WCHAR Title[] = L"ReactOS Console Host";
+    static WCHAR Title[] = L"ReactOS Console Host";
+    static const WCHAR Text[] = L"conhost.exe is working!\r\n";
 
     NTSTATUS Status;
     HWND hWnd;
-    TERMINAL Terminal;
+    HANDLE ConsoleHandle;
     PCONSRV_CONSOLE Console;
     
-    CONSOLE_INFO DrvConsoleInfo;
     CONSOLE_INIT_INFO ConsoleInitInfo;
     CONSOLE_START_INFO ConsoleStartInfo;
 
-    BYTE ConsoleInfoBuffer[sizeof(CONSOLE_STATE_INFO) + MAX_PATH * sizeof(WCHAR)];
-    PCONSOLE_STATE_INFO ConsoleInfo = (PCONSOLE_STATE_INFO)ConsoleInfoBuffer;
+    CSR_PROCESS LeaderProcess; // [IATODO]: Change func sig
+    WCHAR AppName[MAX_PATH];
+    WCHAR CurDir[MAX_PATH];
 
     DPRINT("CONHOST: Starting with args \"%S\"..\n", lpCmdLine);
 
     ConSrvDllInstance = hInst;
     ConSrvHeap = RtlGetProcessHeap();
 
-    RtlZeroMemory(ConsoleInfoBuffer, sizeof(ConsoleInfoBuffer));
-    ConsoleInfo->cbSize = sizeof(ConsoleInfoBuffer);
-    wcscpy(ConsoleInfo->ConsoleTitle, Title);
-    ConCfgGetDefaultSettings(ConsoleInfo);
-    ConCfgReadUserSettings(ConsoleInfo, FALSE);
-    ConsoleInfo->CodePage = GetOEMCP();
+    ConSrvInitConsoleSupport();
+
+    GetModuleFileNameW(NULL, AppName, ARRAYSIZE(AppName));
+    GetCurrentDirectoryW(ARRAYSIZE(CurDir), CurDir);
 
     RtlZeroMemory(&ConsoleInitInfo, sizeof(ConsoleInitInfo));
     RtlZeroMemory(&ConsoleStartInfo, sizeof(ConsoleStartInfo));
     ConsoleInitInfo.ConsoleStartInfo = &ConsoleStartInfo;
     ConsoleInitInfo.IsWindowVisible  = TRUE;
-    ConsoleInitInfo.TitleLength      = sizeof(Title);
-    ConsoleInitInfo.ConsoleTitle     = (PWCHAR)Title;
+    ConsoleInitInfo.ConsoleTitle     = Title;
+    ConsoleInitInfo.TitleLength      = (ULONG)wcslen(Title);
+    ConsoleInitInfo.AppName          = AppName;
+    ConsoleInitInfo.AppNameLength    = (ULONG)wcslen(AppName);
+    ConsoleInitInfo.CurDir           = CurDir;
+    ConsoleInitInfo.CurDirLength     = (ULONG)wcslen(CurDir);
 
-    Status = ConSrvInitTerminal(&Terminal, ConsoleInfo, &ConsoleInitInfo, NtCurrentProcess());
+    RtlZeroMemory(&LeaderProcess, sizeof(LeaderProcess));
+    LeaderProcess.ProcessHandle = NtCurrentProcess();
+
+    Status = ConSrvInitConsole(&ConsoleHandle, &Console, &ConsoleInitInfo, &LeaderProcess);
     if (!NT_SUCCESS(Status))
     {
-        DPRINT1("CONHOST: ConSrvInitTerminal failed, Status = 0x%08lx\n", Status);
-        return 1;
-    }
-
-    Console = ConsoleAllocHeap(HEAP_ZERO_MEMORY, sizeof(*Console));
-    if (!Console)
-    {
-        DPRINT1("CONHOST: ConsoleAllocHeap failed\n");
-        return 1;
-    }
-
-    RtlZeroMemory(&DrvConsoleInfo, sizeof(DrvConsoleInfo));
-    DrvConsoleInfo.ScreenBufferSize = ConsoleInfo->ScreenBufferSize;
-    DrvConsoleInfo.ConsoleSize      = ConsoleInfo->WindowSize;
-    DrvConsoleInfo.CursorSize       = ConsoleInfo->CursorSize;
-    DrvConsoleInfo.ScreenAttrib     = ConsoleInfo->ScreenAttributes;
-    DrvConsoleInfo.PopupAttrib      = ConsoleInfo->PopupAttributes;
-    DrvConsoleInfo.CodePage         = ConsoleInfo->CodePage;
-
-    Status = ConDrvInitConsole((PCONSOLE)Console, &DrvConsoleInfo);
-    if (!NT_SUCCESS(Status))
-    {
-        DPRINT1("CONHOST: ConDrvInitConsole failed, Status = 0x%08lx\n", Status);
-        return 1;
-    }
-
-    RtlCopyMemory(Console->Colors, ConsoleInfo->ColorTable, sizeof(ConsoleInfo->ColorTable));
-
-    ConsoleCreateUnicodeString(&Console->OriginalTitle, ConsoleInfo->ConsoleTitle);
-    ConsoleCreateUnicodeString(&Console->Title, ConsoleInfo->ConsoleTitle);
-
-    InitializeListHead(&Console->ProcessList);
-    InitializeListHead(&Console->ReadWaitQueue);
-    InitializeListHead(&Console->WriteWaitQueue);
-    InitializeListHead(&Console->HistoryBuffers);
-    InitializeListHead(&Console->PopupWindows);
-
-    Console->MaxNumberOfHistoryBuffers = ConsoleInfo->NumberOfHistoryBuffers;
-    Console->HistoryBufferSize = ConsoleInfo->HistoryBufferSize;
-    Console->HistoryNoDup      = ConsoleInfo->HistoryNoDup;
-    Console->LineInsertToggle  = ConsoleInfo->InsertMode;
-    Console->InsertMode        = ConsoleInfo->InsertMode;
-    Console->QuickEdit         = ConsoleInfo->QuickEdit;
-
-    Status = ConDrvAttachTerminal((PCONSOLE)Console, &Terminal);
-    if (!NT_SUCCESS(Status))
-    {
-        DPRINT1("CONHOST: ConDrvAttachTerminal failed, Status = 0x%08lx\n", Status);
+        DPRINT1("CONHOST: ConSrvInitConsole failed, Status = 0x%08lx\n", Status);
         return 1;
     }
 
     DPRINT("CONHOST: Initialized successfully!\n");
 
     EnterCriticalSection(&Console->Lock);
-    static const WCHAR Text[] = L"conhost.exe is working!\r\n";
     Status = ConDrvWriteConsole((PCONSOLE)Console,
                                 (PTEXTMODE_SCREEN_BUFFER)Console->ActiveBuffer,
                                 TRUE, (PVOID)Text, ARRAYSIZE(Text) - 1, NULL);
