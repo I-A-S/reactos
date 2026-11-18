@@ -68,7 +68,9 @@ wWinMain(
 
     NTSTATUS Status;
     TERMINAL Terminal;
+    PCONSRV_CONSOLE Console;
     
+    CONSOLE_INFO DrvConsoleInfo;
     CONSOLE_INIT_INFO ConsoleInitInfo;
     CONSOLE_START_INFO ConsoleStartInfo;
 
@@ -95,8 +97,31 @@ wWinMain(
     ConsoleInitInfo.ConsoleTitle     = (PWCHAR)Title;
 
     Status = ConSrvInitTerminal(&Terminal, ConsoleInfo, &ConsoleInitInfo, NtCurrentProcess());
-    if (!NT_SUCCESS(Status)) {
+    if (!NT_SUCCESS(Status))
+    {
         DPRINT1("CONHOST: ConSrvInitTerminal failed, Status = 0x%08lx\n", Status);
+        return 1;
+    }
+
+    Console = ConsoleAllocHeap(HEAP_ZERO_MEMORY, sizeof(*Console));
+    if (!Console)
+    {
+        DPRINT1("CONHOST: ConsoleAllocHeap failed\n");
+        return 1;
+    }
+
+    RtlZeroMemory(&DrvConsoleInfo, sizeof(DrvConsoleInfo));
+    DrvConsoleInfo.ScreenBufferSize = ConsoleInfo->ScreenBufferSize;
+    DrvConsoleInfo.ConsoleSize      = ConsoleInfo->WindowSize;
+    DrvConsoleInfo.CursorSize       = ConsoleInfo->CursorSize;
+    DrvConsoleInfo.ScreenAttrib     = ConsoleInfo->ScreenAttributes;
+    DrvConsoleInfo.PopupAttrib      = ConsoleInfo->PopupAttributes;
+    DrvConsoleInfo.CodePage         = ConsoleInfo->CodePage;
+
+    Status = ConDrvInitConsole((PCONSOLE)Console, &DrvConsoleInfo);
+    if (!NT_SUCCESS(Status))
+    {
+        DPRINT1("CONHOST: ConDrvInitConsole failed, Status = 0x%08lx\n", Status);
         return 1;
     }
 
