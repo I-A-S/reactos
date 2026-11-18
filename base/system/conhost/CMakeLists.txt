@@ -23,13 +23,6 @@ set(SRC_FILES
   ${CONSRV_DIR}/settings.c
 )
 
-#
-# Explicitly enable MS extensions to be able to use unnamed (anonymous) nested structs.
-#
-if(NOT MSVC)
-  set_source_files_properties(${SRC_FILES} PROPERTIES COMPILE_OPTIONS "-fms-extensions")
-endif()
-
 remove_definitions(-D_WIN32_WINNT=0x502)
 
 add_executable(conhost
