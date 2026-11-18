@@ -30,7 +30,11 @@ NTSTATUS NTAPI
 ConSrvInitConsole(OUT PHANDLE NewConsoleHandle,
                   OUT struct _CONSRV_CONSOLE** /* PCONSRV_CONSOLE* */ NewConsole,
                   IN OUT PCONSOLE_INIT_INFO ConsoleInitInfo,
+#ifdef BUILDING_CONHOST
+                  IN HANDLE ProcessHandle);
+#else
                   IN PCSR_PROCESS ConsoleLeaderProcess);
+#endif
 VOID NTAPI ConSrvDeleteConsole(struct _CONSRV_CONSOLE* /* PCONSRV_CONSOLE */ Console);
 
 NTSTATUS

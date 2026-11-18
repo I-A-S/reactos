@@ -48,7 +48,6 @@ wWinMain(
     CONSOLE_INIT_INFO ConsoleInitInfo;
     CONSOLE_START_INFO ConsoleStartInfo;
 
-    CSR_PROCESS LeaderProcess; // [IATODO]: Change func sig
     WCHAR AppName[MAX_PATH];
     WCHAR CurDir[MAX_PATH];
 
@@ -73,10 +72,7 @@ wWinMain(
     ConsoleInitInfo.CurDir           = CurDir;
     ConsoleInitInfo.CurDirLength     = (ULONG)wcslen(CurDir);
 
-    RtlZeroMemory(&LeaderProcess, sizeof(LeaderProcess));
-    LeaderProcess.ProcessHandle = NtCurrentProcess();
-
-    Status = ConSrvInitConsole(&ConsoleHandle, &Console, &ConsoleInitInfo, &LeaderProcess);
+    Status = ConSrvInitConsole(&ConsoleHandle, &Console, &ConsoleInitInfo, NtCurrentProcess());
     if (!NT_SUCCESS(Status))
     {
         DPRINT1("CONHOST: ConSrvInitConsole failed, Status = 0x%08lx\n", Status);

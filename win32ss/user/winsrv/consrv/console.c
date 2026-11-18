@@ -532,7 +532,11 @@ NTSTATUS NTAPI
 ConSrvInitConsole(OUT PHANDLE NewConsoleHandle,
                   OUT PCONSRV_CONSOLE* NewConsole,
                   IN OUT PCONSOLE_INIT_INFO ConsoleInitInfo,
+#ifdef BUILDING_CONHOST
+                  IN HANDLE ProcessHandle)
+#else
                   IN PCSR_PROCESS ConsoleLeaderProcess)
+#endif
 {
     NTSTATUS Status;
     HANDLE ConsoleHandle;
@@ -658,7 +662,11 @@ ConSrvInitConsole(OUT PHANDLE NewConsoleHandle,
     Status = ConSrvInitTerminal(&Terminal,
                                 ConsoleInfo,
                                 ConsoleInitInfo,
+#ifdef BUILDING_CONHOST
+                                ProcessHandle);
+#else
                                 ConsoleLeaderProcess->ProcessHandle);
+#endif                                
     if (!NT_SUCCESS(Status))
     {
         DPRINT1("CONSRV: Failed to initialize a terminal, Status = 0x%08lx\n", Status);
