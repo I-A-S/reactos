@@ -568,9 +568,11 @@ ConSrvInitConsole(OUT PHANDLE NewConsoleHandle,
     wcsncpy(ConsoleInfo->ConsoleTitle, ConsoleInitInfo->ConsoleTitle, Length);
     ConsoleInfo->ConsoleTitle[Length] = UNICODE_NULL; // NULL-terminate it.
 
+#ifndef BUILDING_CONHOST 
     /* 2. Impersonate the caller in order to retrieve settings in its context */
     if (!CsrImpersonateClient(NULL))
         return STATUS_BAD_IMPERSONATION_LEVEL;
+#endif
 
     /* 3. Load the default settings */
     ConCfgGetDefaultSettings(ConsoleInfo);
@@ -641,8 +643,10 @@ ConSrvInitConsole(OUT PHANDLE NewConsoleHandle,
 #endif
     }
 
+#ifndef BUILDING_CONHOST 
     /* 6. Revert impersonation */
     CsrRevertToSelf();
+#endif
 
     /* Set-up the code page */
     ConsoleInfo->CodePage = GetOEMCP();
@@ -872,6 +876,7 @@ ConioUnpause(PCONSRV_CONSOLE Console, UCHAR Flags)
     {
         ConDrvUnpause((PCONSOLE)Console);
 
+#ifndef BUILDING_CONHOST 
         CsrNotifyWait(&Console->WriteWaitQueue,
                       TRUE,
                       NULL,
@@ -880,6 +885,7 @@ ConioUnpause(PCONSRV_CONSOLE Console, UCHAR Flags)
         {
             CsrDereferenceWait(&Console->WriteWaitQueue);
         }
+#endif
     }
 }
 
@@ -1443,10 +1449,12 @@ ConSrvSetProcessFocus(IN PCSR_PROCESS CsrProcess,
     // FIXME: Call NtUserSetInformationProcess (currently unimplemented!)
     // for setting Win32 foreground/background flags.
 
+#ifndef BUILDING_CONHOST 
     if (SetForeground)
         CsrSetForegroundPriority(CsrProcess);
     else
         CsrSetBackgroundPriority(CsrProcess);
+#endif
 }
 
 NTSTATUS NTAPI
@@ -1478,6 +1486,8 @@ ConSrvSetConsoleProcessFocus(IN PCONSRV_CONSOLE Console,
 
 
 /* PUBLIC SERVER APIS *********************************************************/
+
+#ifndef BUILDING_CONHOST 
 
 /* API_NUMBER: ConsolepAlloc */
 CON_API_NOCONSOLE(SrvAllocConsole,
@@ -2075,5 +2085,7 @@ CON_API(SrvGetConsoleLangId,
 
     return STATUS_SUCCESS;
 }
+
+#endif
 
 /* EOF */
