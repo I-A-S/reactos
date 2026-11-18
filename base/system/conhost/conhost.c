@@ -153,6 +153,18 @@ wWinMain(
 
     DPRINT("CONHOST: Initialized successfully!\n");
 
+    EnterCriticalSection(&Console->Lock);
+    static const WCHAR Text[] = L"conhost.exe is working!\r\n";
+    Status = ConDrvWriteConsole((PCONSOLE)Console,
+                                (PTEXTMODE_SCREEN_BUFFER)Console->ActiveBuffer,
+                                TRUE, (PVOID)Text, ARRAYSIZE(Text) - 1, NULL);
+    LeaveCriticalSection(&Console->Lock);
+    if (!NT_SUCCESS(Status))
+    {
+        DPRINT1("CONHOST: ConDrvWriteConsole failed, Status = 0x%08lx\n", Status);
+        return 1;
+    }
+
     hWnd = Console->FrontEndIFace.Vtbl->GetConsoleWindowHandle(&Console->FrontEndIFace);
     while (1)
     {
