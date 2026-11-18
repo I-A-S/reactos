@@ -101,7 +101,7 @@ ConvertInputUnicodeToAnsi(PCONSRV_CONSOLE Console,
 
 /* PRIVATE FUNCTIONS **********************************************************/
 
-#ifndef BUILDING_CONHOST 
+#ifndef CONSRV_STANDALONE 
 static PALIAS_HEADER
 IntFindAliasHeader(PCONSRV_CONSOLE Console,
                    PVOID    ExeName,
@@ -447,7 +447,7 @@ IntDeleteAllAliases(PCONSRV_CONSOLE Console)
 
 /* PUBLIC SERVER APIS *********************************************************/
 
-#ifndef BUILDING_CONHOST 
+#ifndef CONSRV_STANDALONE 
 
 /* API_NUMBER: ConsolepAddAlias */
 CON_API(SrvAddConsoleAlias,

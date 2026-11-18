@@ -92,7 +92,7 @@ HistoryCurrentBuffer(
     }
 }
 
-#ifndef BUILDING_CONHOST 
+#ifndef CONSRV_STANDALONE 
 static PHISTORY_BUFFER
 HistoryFindBuffer(PCONSRV_CONSOLE Console,
                   PVOID    ExeName,
@@ -424,7 +424,7 @@ HistoryReshapeAllBuffers(
 
 /* PUBLIC SERVER APIS *********************************************************/
 
-#ifndef BUILDING_CONHOST
+#ifndef CONSRV_STANDALONE
 /* API_NUMBER: ConsolepGetCommandHistory */
 CON_API(SrvGetConsoleCommandHistory,
         CONSOLE_GETCOMMANDHISTORY, GetCommandHistoryRequest)

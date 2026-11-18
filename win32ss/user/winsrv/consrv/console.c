@@ -532,7 +532,7 @@ NTSTATUS NTAPI
 ConSrvInitConsole(OUT PHANDLE NewConsoleHandle,
                   OUT PCONSRV_CONSOLE* NewConsole,
                   IN OUT PCONSOLE_INIT_INFO ConsoleInitInfo,
-#ifdef BUILDING_CONHOST
+#ifdef CONSRV_STANDALONE
                   IN HANDLE ProcessHandle)
 #else
                   IN PCSR_PROCESS ConsoleLeaderProcess)
@@ -572,7 +572,7 @@ ConSrvInitConsole(OUT PHANDLE NewConsoleHandle,
     wcsncpy(ConsoleInfo->ConsoleTitle, ConsoleInitInfo->ConsoleTitle, Length);
     ConsoleInfo->ConsoleTitle[Length] = UNICODE_NULL; // NULL-terminate it.
 
-#ifndef BUILDING_CONHOST 
+#ifndef CONSRV_STANDALONE 
     /* 2. Impersonate the caller in order to retrieve settings in its context */
     if (!CsrImpersonateClient(NULL))
         return STATUS_BAD_IMPERSONATION_LEVEL;
@@ -647,7 +647,7 @@ ConSrvInitConsole(OUT PHANDLE NewConsoleHandle,
 #endif
     }
 
-#ifndef BUILDING_CONHOST 
+#ifndef CONSRV_STANDALONE 
     /* 6. Revert impersonation */
     CsrRevertToSelf();
 #endif
@@ -662,7 +662,7 @@ ConSrvInitConsole(OUT PHANDLE NewConsoleHandle,
     Status = ConSrvInitTerminal(&Terminal,
                                 ConsoleInfo,
                                 ConsoleInitInfo,
-#ifdef BUILDING_CONHOST
+#ifdef CONSRV_STANDALONE
                                 ProcessHandle);
 #else
                                 ConsoleLeaderProcess->ProcessHandle);
@@ -884,7 +884,7 @@ ConioUnpause(PCONSRV_CONSOLE Console, UCHAR Flags)
     {
         ConDrvUnpause((PCONSOLE)Console);
 
-#ifndef BUILDING_CONHOST 
+#ifndef CONSRV_STANDALONE 
         CsrNotifyWait(&Console->WriteWaitQueue,
                       TRUE,
                       NULL,
@@ -1457,7 +1457,7 @@ ConSrvSetProcessFocus(IN PCSR_PROCESS CsrProcess,
     // FIXME: Call NtUserSetInformationProcess (currently unimplemented!)
     // for setting Win32 foreground/background flags.
 
-#ifndef BUILDING_CONHOST 
+#ifndef CONSRV_STANDALONE 
     if (SetForeground)
         CsrSetForegroundPriority(CsrProcess);
     else
@@ -1495,7 +1495,7 @@ ConSrvSetConsoleProcessFocus(IN PCONSRV_CONSOLE Console,
 
 /* PUBLIC SERVER APIS *********************************************************/
 
-#ifndef BUILDING_CONHOST 
+#ifndef CONSRV_STANDALONE 
 
 /* API_NUMBER: ConsolepAlloc */
 CON_API_NOCONSOLE(SrvAllocConsole,

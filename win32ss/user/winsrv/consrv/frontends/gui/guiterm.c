@@ -109,7 +109,7 @@ GuiConsoleInputThread(PVOID Param)
     DESKTOP_CONSOLE_THREAD DesktopConsoleThreadInfo;
     ULONG_PTR InputThreadId = HandleToUlong(NtCurrentTeb()->ClientId.UniqueThread);
 
-#ifndef BUILDING_CONHOST
+#ifndef CONSRV_STANDALONE
     PCSR_THREAD pcsrt = NULL;
     HANDLE hThread = NULL;
 #endif
@@ -126,14 +126,14 @@ GuiConsoleInputThread(PVOID Param)
     /* Assign this console input thread to this desktop */
     DesktopConsoleThreadInfo.DesktopHandle = GuiInitInfo->Desktop; // Duplicated desktop handle
     DesktopConsoleThreadInfo.ThreadId = InputThreadId;
-#ifndef BUILDING_CONHOST
+#ifndef CONSRV_STANDALONE
     Status = NtUserConsoleControl(ConsoleCtrlDesktopConsoleThread,
                                   &DesktopConsoleThreadInfo,
                                   sizeof(DesktopConsoleThreadInfo));
     if (!NT_SUCCESS(Status)) goto Quit;
 #endif
 
-#ifndef BUILDING_CONHOST
+#ifndef CONSRV_STANDALONE
     /* Connect this CSR thread to the USER subsystem */
     pcsrt = CsrConnectToUser();
     if (pcsrt == NULL) goto Quit;
@@ -262,7 +262,7 @@ GuiConsoleInputThread(PVOID Param)
 Quit:
     DPRINT("CONSRV: Quit the Input Thread 0x%p, Status = 0x%08lx\n", InputThreadId, Status);
 
-#ifndef BUILDING_CONHOST
+#ifndef CONSRV_STANDALONE
     /* Remove this console input thread from this desktop */
     // DesktopConsoleThreadInfo.DesktopHandle;
     DesktopConsoleThreadInfo.ThreadId = 0;
@@ -274,7 +274,7 @@ Quit:
     /* Close the duplicated desktop handle */
     CloseDesktop(DesktopConsoleThreadInfo.DesktopHandle); // NtUserCloseDesktop
 
-#ifndef BUILDING_CONHOST
+#ifndef CONSRV_STANDALONE
     /* Cleanup CSR thread */
     if (pcsrt)
     {
@@ -297,7 +297,7 @@ GuiInit(IN PCONSOLE_INIT_INFO ConsoleInitInfo,
         IN OUT PGUI_INIT_INFO GuiInitInfo)
 {
     BOOL Success = TRUE;
-#ifndef BUILDING_CONHOST
+#ifndef CONSRV_STANDALONE
     UNICODE_STRING DesktopPath;
 #endif
     DESKTOP_CONSOLE_THREAD DesktopConsoleThreadInfo;
@@ -324,7 +324,7 @@ GuiInit(IN PCONSOLE_INIT_INFO ConsoleInitInfo,
      * Set-up the console input thread. We have
      * one console input thread per desktop.
      */
-#ifdef BUILDING_CONHOST
+#ifdef CONSRV_STANDALONE
     /*
      * conhost is started on the desktop of the application it serves,
      * so use its own window station and desktop. Duplicate them, so that
@@ -460,7 +460,7 @@ GuiInit(IN PCONSOLE_INIT_INFO ConsoleInitInfo,
                                  &ClientId);
     if (NT_SUCCESS(Status))
     {
-#ifndef BUILDING_CONHOST
+#ifndef CONSRV_STANDALONE
         /* Add it as a static server thread and resume it */
         CsrAddStaticServerThread(hInputThread, &ClientId, 0);
 #endif
@@ -485,7 +485,7 @@ GuiInit(IN PCONSOLE_INIT_INFO ConsoleInitInfo,
         goto Quit;
     }
 
-    #ifdef BUILDING_CONHOST
+    #ifdef CONSRV_STANDALONE
         NtClose(hInputThread);
     #else
         /* No need to close hInputThread, this is done by CSR automatically */

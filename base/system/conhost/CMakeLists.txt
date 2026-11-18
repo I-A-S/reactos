@@ -52,7 +52,7 @@ target_link_libraries(conhost
 )
 
 target_compile_definitions(conhost PRIVATE
-  -DBUILDING_CONHOST=1
+  -DCONSRV_STANDALONE=1
   -D_WIN32_WINNT=0x600
 )
 

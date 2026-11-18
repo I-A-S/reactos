@@ -58,7 +58,7 @@ ConSrvCloseHandle(IN PCONSOLE_IO_HANDLE Handle)
     PCONSOLE_IO_OBJECT Object = Handle->Object;
     if (Object != NULL)
     {
-#ifndef BUILDING_CONHOST 
+#ifndef CONSRV_STANDALONE 
         /*
          * If this is a input handle, notify and dereference
          * all the waits related to this handle.
@@ -391,7 +391,7 @@ ConSrvReleaseObject(IN PCONSOLE_IO_OBJECT Object,
 
 /* PUBLIC SERVER APIS *********************************************************/
 
-#ifndef BUILDING_CONHOST
+#ifndef CONSRV_STANDALONE
 
 /* API_NUMBER: ConsolepOpenConsole */
 CON_API(SrvOpenConsole,
