@@ -1,5 +1,5 @@
 /*
- * PROJECT:     ReactOS ConHost
+ * PROJECT:     ReactOS Console Host
  * LICENSE:     GPL-2.0+ (https://spdx.org/licenses/GPL-2.0+)
  * PURPOSE:     Console Host.
  * COPYRIGHT:   Copyright 2026 Aravinda Samarathunga
@@ -64,19 +64,35 @@ wWinMain(
     LPWSTR lpCmdLine,
     INT nCmdShow)
 {
+    static const WCHAR Title[] = L"ReactOS Console Host";
+
     NTSTATUS Status;
     TERMINAL Terminal;
+    
     CONSOLE_INIT_INFO ConsoleInitInfo;
+    CONSOLE_START_INFO ConsoleStartInfo;
 
     BYTE ConsoleInfoBuffer[sizeof(CONSOLE_STATE_INFO) + MAX_PATH * sizeof(WCHAR)];
     PCONSOLE_STATE_INFO ConsoleInfo = (PCONSOLE_STATE_INFO)ConsoleInfoBuffer;
 
     DPRINT1("CONHOST: starting with args \"%S\"..\n", lpCmdLine);
 
+    ConSrvDllInstance = hInst;
     ConSrvHeap = RtlGetProcessHeap();
 
-    RtlZeroMemory(&ConsoleInitInfo, sizeof(ConsoleInitInfo));
     RtlZeroMemory(ConsoleInfoBuffer, sizeof(ConsoleInfoBuffer));
+    ConsoleInfo->cbSize = sizeof(ConsoleInfoBuffer);
+    wcscpy(ConsoleInfo->ConsoleTitle, Title);
+    ConCfgGetDefaultSettings(ConsoleInfo);
+    ConCfgReadUserSettings(ConsoleInfo, FALSE);
+    ConsoleInfo->CodePage = GetOEMCP();
+
+    RtlZeroMemory(&ConsoleInitInfo, sizeof(ConsoleInitInfo));
+    RtlZeroMemory(&ConsoleStartInfo, sizeof(ConsoleStartInfo));
+    ConsoleInitInfo.ConsoleStartInfo = &ConsoleStartInfo;
+    ConsoleInitInfo.IsWindowVisible  = TRUE;
+    ConsoleInitInfo.TitleLength      = sizeof(Title);
+    ConsoleInitInfo.ConsoleTitle     = (PWCHAR)Title;
 
     Status = ConSrvInitTerminal(&Terminal, ConsoleInfo, &ConsoleInitInfo, NtCurrentProcess());
     if (!NT_SUCCESS(Status)) {

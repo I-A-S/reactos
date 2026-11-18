@@ -13,7 +13,7 @@
 
 #include <consrv.h>
 
-#define NDEBUG
+//#define NDEBUG
 #include <debug.h>
 
 #include "concfg/font.h"
@@ -105,11 +105,14 @@ static ULONG NTAPI
 GuiConsoleInputThread(PVOID Param)
 {
     NTSTATUS Status;
-    PCSR_THREAD pcsrt = NULL;
     PGUI_INIT_INFO GuiInitInfo = (PGUI_INIT_INFO)Param;
     DESKTOP_CONSOLE_THREAD DesktopConsoleThreadInfo;
     ULONG_PTR InputThreadId = HandleToUlong(NtCurrentTeb()->ClientId.UniqueThread);
+
+#ifndef BUILDING_CONHOST
+    PCSR_THREAD pcsrt = NULL;
     HANDLE hThread = NULL;
+#endif
 
     LONG WindowCount = 0;
     MSG msg;
@@ -123,15 +126,19 @@ GuiConsoleInputThread(PVOID Param)
     /* Assign this console input thread to this desktop */
     DesktopConsoleThreadInfo.DesktopHandle = GuiInitInfo->Desktop; // Duplicated desktop handle
     DesktopConsoleThreadInfo.ThreadId = InputThreadId;
+#ifndef BUILDING_CONHOST
     Status = NtUserConsoleControl(ConsoleCtrlDesktopConsoleThread,
                                   &DesktopConsoleThreadInfo,
                                   sizeof(DesktopConsoleThreadInfo));
     if (!NT_SUCCESS(Status)) goto Quit;
+#endif
 
+#ifndef BUILDING_CONHOST
     /* Connect this CSR thread to the USER subsystem */
     pcsrt = CsrConnectToUser();
     if (pcsrt == NULL) goto Quit;
     hThread = pcsrt->ThreadHandle;
+#endif
 
     /* Assign the desktop to this thread */
     if (!SetThreadDesktop(DesktopConsoleThreadInfo.DesktopHandle)) goto Quit;
@@ -265,6 +272,7 @@ Quit:
     /* Close the duplicated desktop handle */
     CloseDesktop(DesktopConsoleThreadInfo.DesktopHandle); // NtUserCloseDesktop
 
+#ifndef BUILDING_CONHOST
     /* Cleanup CSR thread */
     if (pcsrt)
     {
@@ -273,6 +281,7 @@ Quit:
 
         CsrDereferenceThread(pcsrt);
     }
+#endif
 
     /* Exit the thread */
     RtlExitUserThread(Status);
@@ -311,10 +320,11 @@ GuiInit(IN PCONSOLE_INIT_INFO ConsoleInitInfo,
      * Set-up the console input thread. We have
      * one console input thread per desktop.
      */
-
+#ifndef BUILDING_CONHOST
     if (!CsrImpersonateClient(NULL))
         // return STATUS_BAD_IMPERSONATION_LEVEL;
         return FALSE;
+#endif
 
     if (ConsoleInitInfo->DesktopLength)
     {
@@ -334,7 +344,9 @@ GuiInit(IN PCONSOLE_INIT_INFO ConsoleInitInfo,
     DPRINT("NtUserResolveDesktop(DesktopPath = '%wZ') returned hDesk = 0x%p; hWinSta = 0x%p\n",
            &DesktopPath, hDesk, hWinSta);
 
+#ifndef BUILDING_CONHOST
     CsrRevertToSelf();
+#endif
 
     if (hDesk == NULL) return FALSE;
 
@@ -414,8 +426,10 @@ GuiInit(IN PCONSOLE_INIT_INFO ConsoleInitInfo,
                                  &ClientId);
     if (NT_SUCCESS(Status))
     {
+#ifndef BUILDING_CONHOST
         /* Add it as a static server thread and resume it */
         CsrAddStaticServerThread(hInputThread, &ClientId, 0);
+#endif
         Status = NtResumeThread(hInputThread, NULL);
     }
     DPRINT("Thread creation hInputThread = 0x%p, InputThreadId = 0x%p, Status = 0x%08lx\n",
@@ -437,7 +451,11 @@ GuiInit(IN PCONSOLE_INIT_INFO ConsoleInitInfo,
         goto Quit;
     }
 
-    /* No need to close hInputThread, this is done by CSR automatically */
+    #ifdef BUILDING_CONHOST
+        NtClose(hInputThread);
+    #else
+        /* No need to close hInputThread, this is done by CSR automatically */
+    #endif
 
     /* Wait for the thread to finish its initialization, and close the startup event */
     NtWaitForSingleObject(GuiInitInfo->GuiThreadStartupEvent, FALSE, NULL);
