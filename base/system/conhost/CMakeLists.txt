@@ -21,6 +21,12 @@ set(SRC_FILES
   ${CONSRV_DIR}/frontends/terminal.c
   ${CONSRV_DIR}/frontends/wcwidth.c
   ${CONSRV_DIR}/settings.c
+  ${CONSRV_DIR}/handle.c
+  ${CONSRV_DIR}/alias.c
+  ${CONSRV_DIR}/history.c
+  ${CONSRV_DIR}/console.c
+  ${CONSRV_DIR}/lineinput.c
+  ${CONSRV_DIR}/popup.c
 )
 
 remove_definitions(-D_WIN32_WINNT=0x502)
@@ -40,6 +46,7 @@ target_include_directories(conhost PRIVATE
 
 target_link_libraries(conhost
   concfg
+  uuid
   win32ksys
   ${PSEH_LIB}
 )
@@ -51,6 +58,6 @@ target_compile_definitions(conhost PRIVATE
 
 set_module_type(conhost win32gui UNICODE)
 
-add_importlibs(conhost msvcrt kernel32 ntdll user32 gdi32 shell32 advapi32)
+add_importlibs(conhost msvcrt kernel32 ntdll user32 gdi32 shell32 advapi32 ole32)
 
 add_cd_file(TARGET conhost DESTINATION reactos/system32 FOR all)

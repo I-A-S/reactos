@@ -17,87 +17,9 @@
 HANDLE    ConSrvHeap;
 HINSTANCE ConSrvDllInstance;
 
-// Copied from `RtlCreateUnicodeString`
-// and modified to use ConsoleAllocHeap
-// [TODO]: Just noticed someone already has done that in console.c too
-// maybe time to move its def to a header
-static BOOLEAN NTAPI
-ConsoleCreateUnicodeString(
-    IN OUT PUNICODE_STRING UniDest,
-    IN PCWSTR  Source)
-{
-    SIZE_T Size;
-
-    Size = (wcslen(Source) + 1) * sizeof(WCHAR);
-    if (Size > MAXUSHORT) return FALSE;
-
-    UniDest->Buffer = ConsoleAllocHeap(0, Size);
-
-    if (UniDest->Buffer == NULL) return FALSE;
-
-    RtlCopyMemory(UniDest->Buffer, Source, Size);
-    UniDest->MaximumLength = (USHORT)Size;
-    UniDest->Length = (USHORT)Size - sizeof (WCHAR);
-
-    return TRUE;
-}
-
-VOID
-ConSrvInitObject(PCONSOLE_IO_OBJECT Object,
-    CONSOLE_IO_OBJECT_TYPE Type,
-    PCONSOLE Console)
-{
-    Object->Type = Type;
-    Object->Console = Console;
-    Object->AccessRead = 0;
-    Object->AccessWrite = 0;
-    Object->ExclusiveRead = 0;
-    Object->ExclusiveWrite = 0;
-    Object->ReferenceCount = 0;
-}
-
-VOID
-ConioPause(PCONSRV_CONSOLE Console, UCHAR Flags)
-{
-    Console->PauseFlags |= Flags;
-    ConDrvPause((PCONSOLE)Console);
-}
-
-VOID
-ConioUnpause(PCONSRV_CONSOLE Console, UCHAR Flags)
-{
-    Console->PauseFlags &= ~Flags;
-
-    if (Console->PauseFlags == 0)
-    {
-        ConDrvUnpause((PCONSOLE)Console);
-
-        // [IATODO]
-        // CsrNotifyWait(&Console->WriteWaitQueue,
-        //               TRUE,
-        //               NULL,
-        //               NULL);
-        // if (!IsListEmpty(&Console->WriteWaitQueue))
-        // {
-        //     CsrDereferenceWait(&Console->WriteWaitQueue);
-        // }
-    }
-}
-
 // HACK
-VOID HistoryReshapeAllBuffers(PCONSRV_CONSOLE C, ULONG a, ULONG b, BOOLEAN c) {}
-PCONSOLE_PROCESS_DATA NTAPI ConSrvGetConsoleLeaderProcess(PCONSRV_CONSOLE Console) { return NULL; }
-NTSTATUS NTAPI ConSrvConsoleProcessCtrlEvent(PCONSRV_CONSOLE C, ULONG g, ULONG e) { return STATUS_NOT_IMPLEMENTED; }
-NTSTATUS NTAPI ConSrvSetConsoleProcessFocus(PCONSRV_CONSOLE C, BOOLEAN f) { return STATUS_NOT_IMPLEMENTED; }
 NTSTATUS ConioProcessInputEvent(PCONSRV_CONSOLE C, PINPUT_RECORD e) { return STATUS_NOT_IMPLEMENTED; }
-VOID LineInputKeyDown(PCONSRV_CONSOLE Console, PUNICODE_STRING ExeName, KEY_EVENT_RECORD *KeyEvent) {}
 // HACK
-
-NTSTATUS NTAPI
-ConSrvInitTerminal(IN OUT PTERMINAL Terminal,
-                   IN OUT PCONSOLE_STATE_INFO ConsoleInfo,
-                   IN OUT PCONSOLE_INIT_INFO ConsoleInitInfo,
-                   IN HANDLE ConsoleLeaderProcessHandle);
 
 NTSTATUS NTAPI
 ConDrvWriteConsole(IN PCONSOLE Console,
