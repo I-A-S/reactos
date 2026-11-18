@@ -92,6 +92,7 @@ HistoryCurrentBuffer(
     }
 }
 
+#ifndef BUILDING_CONHOST 
 static PHISTORY_BUFFER
 HistoryFindBuffer(PCONSRV_CONSOLE Console,
                   PVOID    ExeName,
@@ -139,6 +140,7 @@ HistoryFindBuffer(PCONSRV_CONSOLE Console,
     if (!UnicodeExe) ConsoleFreeHeap(ExeNameU.Buffer);
     return NULL;
 }
+#endif
 
 static VOID
 HistoryDeleteBuffer(PHISTORY_BUFFER Hist)
@@ -422,6 +424,7 @@ HistoryReshapeAllBuffers(
 
 /* PUBLIC SERVER APIS *********************************************************/
 
+#ifndef BUILDING_CONHOST
 /* API_NUMBER: ConsolepGetCommandHistory */
 CON_API(SrvGetConsoleCommandHistory,
         CONSOLE_GETCOMMANDHISTORY, GetCommandHistoryRequest)
@@ -652,5 +655,7 @@ CON_API(SrvSetConsoleCommandHistoryMode,
     Console->InsertMode = !!(SetHistoryModeRequest->Mode & CONSOLE_OVERSTRIKE);
     return STATUS_SUCCESS;
 }
+
+#endif
 
 /* EOF */
